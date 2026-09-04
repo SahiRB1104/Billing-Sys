@@ -67,7 +67,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
           {/* Quick Switch Buttons */}
           <div className="mb-5 space-y-2">
-            <div className="text-xs font-bold uppercase tracking-wider text-stone-500">
+            <div className="text-xs font-bold text-stone-500">
               {t('login.quickSwitch')}
             </div>
             <button
@@ -94,7 +94,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-stone-200" />
             </div>
-            <span className="relative bg-[#fbfaf8] px-2 text-xs font-bold uppercase tracking-wider text-stone-400">
+            <span className="relative bg-[#fbfaf8] px-2 text-xs font-bold text-stone-400">
               {t('login.orCredentials')}
             </span>
           </div>

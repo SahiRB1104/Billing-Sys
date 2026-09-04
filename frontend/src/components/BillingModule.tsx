@@ -42,12 +42,12 @@ export const BillingModule: React.FC = () => {
       <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-xs font-bold uppercase tracking-[0.22em] text-stone-500">
+            <div className="text-xs font-bold text-stone-500">
               {t('nav.billing')}
             </div>
             <h2 className="mt-1 text-2xl font-black text-stone-900">{t('billing.newBill')}</h2>
           </div>
-          <div className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-stone-700">
+          <div className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-xs font-bold text-stone-700">
             {selectedPayment}
           </div>
         </div>
@@ -80,7 +80,7 @@ export const BillingModule: React.FC = () => {
 
         {/* Search Results — immediately below the search field */}
         <div className="mt-4 rounded-2xl border border-stone-200 bg-white p-3 shadow-sm">
-          <h3 className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-stone-500">
+          <h3 className="mb-2 text-xs font-bold text-stone-500">
             शोध परिणाल
           </h3>
           {!search.trim() ? (
@@ -123,7 +123,7 @@ export const BillingModule: React.FC = () => {
 
         {/* Frequently Bought — compact quick-add, appears last */}
         <div className="mt-5">
-          <h3 className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-stone-500">
+          <h3 className="mb-2 text-xs font-bold text-stone-500">
             वारंवार खरेदी
           </h3>
           {frequentProducts.length === 0 ? (
@@ -156,7 +156,7 @@ export const BillingModule: React.FC = () => {
       <aside className="rounded-2xl border border-stone-200 bg-stone-50 p-5 shadow-sm">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h3 className="text-2xl font-black text-stone-900">{t('cart.title')}</h3>
-          <div className="rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-stone-700">
+          <div className="rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-bold text-stone-700">
             {cart.length} items
           </div>
         </div>
@@ -187,7 +187,7 @@ export const BillingModule: React.FC = () => {
 
                 <div className="mt-3 grid grid-cols-[1fr_auto] items-end gap-3">
                   <label className="block">
-                    <span className="mb-1 block text-xs font-bold uppercase tracking-[0.16em] text-stone-500">
+                    <span className="mb-1 block text-xs font-bold text-stone-500">
                       प्रमाण
                     </span>
                      <input
@@ -216,7 +216,7 @@ export const BillingModule: React.FC = () => {
                      />
                   </label>
                   <div className="text-right">
-                    <div className="text-xs font-bold uppercase tracking-[0.16em] text-stone-500">
+                    <div className="text-xs font-bold text-stone-500">
                       Line total
                     </div>
                     <div className="text-lg font-black text-stone-900">

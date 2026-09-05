@@ -68,7 +68,7 @@ const AppShellInner: React.FC = () => {
   return (
     <>
       <div className="app-shell min-h-screen bg-[#f3efe8] px-5 py-6 text-stone-800">
-        <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-[1600px] flex-col rounded-[28px] border border-stone-200 bg-[#fbfaf8] shadow-[0_30px_80px_rgba(71,52,34,0.12)]">
+        <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-[1920px] flex-col rounded-[28px] border border-stone-200 bg-[#fbfaf8] shadow-[0_30px_80px_rgba(71,52,34,0.12)]">
           <Header
             statusText={statusText}
             onClearStatus={() => setStatusText('')}

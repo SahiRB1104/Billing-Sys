@@ -26,10 +26,11 @@ void i18next.use(initReactI18next).init({
   interpolation: {
     escapeValue: false,
   },
-  onLanguageChanged: (lng) => {
-    applyLanguageClass(lng)
-    localStorage.setItem('pos_language', lng)
-  },
+})
+
+i18next.on('languageChanged', (lng: string) => {
+  applyLanguageClass(lng)
+  localStorage.setItem('pos_language', lng)
 })
 
 export default i18next

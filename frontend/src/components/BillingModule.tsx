@@ -95,17 +95,19 @@ export const BillingModule: React.FC = () => {
                   className="flex items-center justify-between rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline justify-between">
+                    <div className="flex items-center gap-2">
                       <span className="font-medium text-stone-900">{product.name_mr}</span>
-                      <span className="ml-3 text-sm font-semibold text-stone-900">
-                        ₹ {Number(product.selling_price ?? 0).toFixed(2)}
-                      </span>
+                      {product.unit_display ? (
+                        <span className="rounded-md bg-stone-100 px-1.5 py-0.5 text-xs font-bold text-stone-600">
+                          {product.unit_display}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-1 text-sm font-semibold text-stone-900">
+                      ₹ {Number(product.selling_price ?? 0).toFixed(2)}
                     </div>
                     <div className="mt-0.5 text-xs text-stone-500">
-                      {product.barcode ? `बारकोड: ${product.barcode}` : ''}
-                      {product.category_mr
-                        ? `${product.barcode ? ' | ' : ''}${product.category_mr}`
-                        : ''}
+                      साठा: {product.current_stock}
                     </div>
                   </div>
                   <button
@@ -138,6 +140,11 @@ export const BillingModule: React.FC = () => {
                   className="flex flex-col items-center justify-center rounded-xl border border-stone-200 bg-white px-3 py-3 text-center transition hover:border-stone-300 hover:bg-stone-50"
                 >
                   <span className="font-medium text-stone-900">{product.name_mr}</span>
+                  {product.unit_display ? (
+                    <span className="mt-0.5 text-xs font-bold text-stone-500">
+                      {product.unit_display}
+                    </span>
+                  ) : null}
                   <span className="mt-1 text-sm font-semibold text-stone-900">
                     ₹ {Number(product.selling_price ?? 0).toFixed(2)}
                   </span>
@@ -172,6 +179,11 @@ export const BillingModule: React.FC = () => {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="font-bold text-stone-900">{item.name}</div>
+                    {item.unitDisplay ? (
+                      <div className="mt-0.5 text-xs font-bold text-stone-500">
+                        {item.unitDisplay}
+                      </div>
+                    ) : null}
                     <div className="mt-1 text-xs text-stone-500">
                       ₹ {Number(item.unitPrice).toFixed(2)} / {t('cart.perUnit')}
                     </div>

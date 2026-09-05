@@ -219,6 +219,19 @@ select {
   transition: all 0.2s ease;
 }
 
+/* ── No browser number spinners (manual numpad entry) ─────────── */
+
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 /* ── Print receipt / label styles (unchanged) ────────────────── */
 
 .print-receipt-root {
@@ -264,6 +277,13 @@ select {
   font-weight: 900;
   margin-bottom: 6px;
   line-height: 1.2;
+  color: #111827;
+}
+
+.barcode-label-unit {
+  font-size: 8px;
+  font-weight: 600;
+  margin-top: 2px;
   color: #111827;
 }
 
@@ -622,6 +642,14 @@ select {
     overflow-wrap: anywhere !important;
     word-break: normal !important;
     min-width: 0 !important;
+  }
+
+  .receipt-item-unit {
+    font-size: 6.4px !important;
+    font-weight: 500 !important;
+    line-height: 1.25 !important;
+    color: #111827 !important;
+    overflow-wrap: anywhere !important;
   }
 
   .receipt-total-row,

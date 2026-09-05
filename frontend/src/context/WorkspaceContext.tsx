@@ -9,6 +9,11 @@ import React, {
 import { useTranslation } from 'react-i18next'
 import type { Product, Bill, InvoiceDetail, CartItem, FrequentProduct, CurrentUser } from '../types'
 import { searchMatchesProduct, transliterateText } from '../utils/transliteration'
+import {
+  CUSTOM_PACK_OPTION,
+  PACK_QUANTITY_OPTIONS,
+  isValidPackQuantity,
+} from '../constants/productOptions'
 
 const API_URL = 'http://localhost:8000'
 
@@ -89,14 +94,16 @@ interface WorkspaceContextType {
   setFormNameMr: (val: string) => void
   formCategoryMr: string
   setFormCategoryMr: (val: string) => void
-  formUnit: string
-  setFormUnit: (val: string) => void
+  formUnitType: string
+  setFormUnitType: (val: string) => void
+  formPackQtyPreset: string
+  setFormPackQtyPreset: (val: string) => void
+  formPackQtyCustom: string
+  setFormPackQtyCustom: (val: string) => void
   formBarcode: string
   setFormBarcode: (val: string) => void
   formSku: string
   setFormSku: (val: string) => void
-  formHsnCode: string
-  setFormHsnCode: (val: string) => void
   formPurchasePrice: number
   setFormPurchasePrice: (val: number) => void
   formSellingPrice: number
@@ -182,10 +189,11 @@ export const WorkspaceProvider: React.FC<{
   // Product Form
   const [formNameMr, setFormNameMr] = useState('')
   const [formCategoryMr, setFormCategoryMr] = useState('')
-  const [formUnit, setFormUnit] = useState('किलो')
+  const [formUnitType, setFormUnitType] = useState('किलो')
+  const [formPackQtyPreset, setFormPackQtyPreset] = useState('1')
+  const [formPackQtyCustom, setFormPackQtyCustom] = useState('')
   const [formBarcode, setFormBarcode] = useState('')
   const [formSku, setFormSku] = useState('')
-  const [formHsnCode, setFormHsnCode] = useState('')
   const [formPurchasePrice, setFormPurchasePrice] = useState(0)
   const [formSellingPrice, setFormSellingPrice] = useState(0)
   const [formMrp, setFormMrp] = useState(0)
@@ -300,6 +308,7 @@ export const WorkspaceProvider: React.FC<{
         {
           id: product.id,
           name: product.name_mr,
+          unitDisplay: product.unit_display || '',
           unitPrice,
           qty: 1,
           gst: Number(product.gst_rate ?? 0),
@@ -534,13 +543,25 @@ export const WorkspaceProvider: React.FC<{
       setStatusText('केवळ प्रशासक नवीन उत्पादने जोडू शकतात (403 Forbidden).')
       return
     }
+
+    let packQuantity: number | null = null
+    if (formPackQtyPreset === CUSTOM_PACK_OPTION) {
+      if (!isValidPackQuantity(formPackQtyCustom)) {
+        setStatusText('पॅक प्रमाण योग्य नाही. 0 पेक्षा मोठी संख्या प्रविष्ट करा.')
+        return
+      }
+      packQuantity = Number(formPackQtyCustom.trim())
+    } else {
+      packQuantity = Number(formPackQtyPreset)
+    }
+
     const payload = {
       name_mr: formNameMr.trim(),
       barcode: formBarcode.trim() || null,
       sku: formSku.trim() || null,
       category_mr: formCategoryMr.trim() || null,
-      unit: formUnit.trim() || null,
-      hsn_code: formHsnCode.trim() || null,
+      unit_type: formUnitType.trim() || null,
+      pack_quantity: packQuantity,
       purchase_price: Number(formPurchasePrice),
       selling_price: Number(formSellingPrice),
       mrp: Number(formMrp),
@@ -569,7 +590,8 @@ export const WorkspaceProvider: React.FC<{
       setFormCategoryMr('')
       setFormBarcode('')
       setFormSku('')
-      setFormHsnCode('')
+      setFormPackQtyPreset(PACK_QUANTITY_OPTIONS[formUnitType]?.[0] ?? '1')
+      setFormPackQtyCustom('')
     } catch (error) {
       console.error(error)
       setStatusText('उत्पाद तयार करण्यात त्रुटी आली.')
@@ -711,14 +733,16 @@ export const WorkspaceProvider: React.FC<{
     setFormNameMr,
     formCategoryMr,
     setFormCategoryMr,
-    formUnit,
-    setFormUnit,
+    formUnitType,
+    setFormUnitType,
+    formPackQtyPreset,
+    setFormPackQtyPreset,
+    formPackQtyCustom,
+    setFormPackQtyCustom,
     formBarcode,
     setFormBarcode,
     formSku,
     setFormSku,
-    formHsnCode,
-    setFormHsnCode,
     formPurchasePrice,
     setFormPurchasePrice,
     formSellingPrice,

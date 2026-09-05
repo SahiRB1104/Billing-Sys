@@ -68,7 +68,12 @@ export const InvoiceDetailModal: React.FC = () => {
             <tbody>
               {selectedInvoice.items.map((item) => (
                 <tr key={item.id} className="border-t border-stone-200">
-                  <td className="px-4 py-3 font-semibold text-stone-800">{item.product_name_mr}</td>
+                  <td className="px-4 py-3">
+                    <div className="font-semibold text-stone-800">{item.product_name_mr}</div>
+                    {item.unit_display ? (
+                      <div className="text-xs font-bold text-stone-500">{item.unit_display}</div>
+                    ) : null}
+                  </td>
                   <td className="px-4 py-3">{Number(item.quantity).toFixed(0)}</td>
                   <td className="px-4 py-3">₹ {Number(item.unit_price).toFixed(2)}</td>
                   <td className="px-4 py-3">₹ {Number(item.discount).toFixed(2)}</td>

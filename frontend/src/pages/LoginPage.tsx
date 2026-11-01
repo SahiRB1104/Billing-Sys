@@ -2,13 +2,14 @@ import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { LuStore, LuUserCheck, LuKeyRound } from '../components/Icons'
 
 interface LoginPageProps {
   onLoginSuccess?: () => void
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { login, loading, currentUser } = useAuth()
 
@@ -16,10 +17,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [password, setPassword] = useState('admin123')
   const [loginError, setLoginError] = useState('')
 
+  const isMarathi = (i18n.language || 'mr').startsWith('mr')
+
+  const handleLanguageChange = (lng: string) => {
+    void i18n.changeLanguage(lng)
+    localStorage.setItem('pos_language', lng)
+    document.documentElement.lang = lng
+  }
+
   if (currentUser) {
     return (
       <Navigate
-        to={currentUser.role === 'ADMIN' ? '/products' : '/billing'}
+        to={currentUser.role === 'ADMIN' ? '/' : '/billing'}
         replace
       />
     )
@@ -31,7 +40,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     const user = await login(username, password)
     if (user) {
       onLoginSuccess?.()
-      navigate(user.role === 'ADMIN' ? '/products' : '/billing')
+      navigate(user.role === 'ADMIN' ? '/' : '/billing')
     } else {
       setLoginError(t('login.error'))
     }
@@ -42,94 +51,146 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     const user = await login(userArg, pass)
     if (user) {
       onLoginSuccess?.()
-      navigate(user.role === 'ADMIN' ? '/products' : '/billing')
+      navigate(user.role === 'ADMIN' ? '/' : '/billing')
     } else {
       setLoginError(t('login.error'))
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#f3efe8] p-4">
-      <div className="w-full max-w-md rounded-[28px] border border-stone-200 bg-[#fbfaf8] shadow-[0_30px_80px_rgba(71,52,34,0.12)]">
-        <div className="p-8">
-          <div className="mb-6 text-center">
-            <h1 className="text-3xl font-black text-stone-900">{t('app.shopPoint')}</h1>
-            <p className="mt-1 text-sm text-stone-500">{t('app.title')}</p>
+    <div className="flex h-dvh w-full flex-col items-center justify-center overflow-hidden bg-[#ECDFC8] p-4">
+      <div className="w-full max-w-md rounded-md border-2 border-[#ECB390] bg-[#FCF8E8] p-6 shadow-2xl">
+        {/* Top Bar with Strict Language Switcher */}
+        <div className="mb-4 flex items-center justify-between border-b border-[#ECB390] pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-md border border-[#ECB390] bg-[#DF7861] text-base font-black text-[#FCF8E8]">
+              <LuStore className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-base font-black leading-tight text-[#3D251E]">
+                {t('app.shopPoint')}
+              </h1>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[#7A6258]">
+                {t('app.title')}
+              </p>
+            </div>
           </div>
 
-          <h2 className="mb-6 text-2xl font-black text-stone-900">{t('login.title')}</h2>
-
-          {loginError && (
-            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
-              {loginError}
-            </div>
-          )}
-
-          {/* Quick Switch Buttons */}
-          <div className="mb-5 space-y-2">
-            <div className="text-xs font-bold text-stone-500">
-              {t('login.quickSwitch')}
-            </div>
+          <div className="flex items-center rounded-md border border-[#ECB390] bg-[#ECDFC8] p-0.5">
             <button
               type="button"
-              onClick={() => void handleQuickLogin('admin', 'admin123')}
-              disabled={loading}
-              className="flex w-full items-center justify-between rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-left font-bold text-amber-900 hover:bg-amber-100 disabled:opacity-60"
+              onClick={() => handleLanguageChange('mr')}
+              className={`rounded px-2.5 py-1 text-xs font-bold transition font-marathi ${
+                isMarathi
+                  ? 'bg-[#DF7861] text-[#FCF8E8] shadow-xs'
+                  : 'text-[#3D251E] hover:bg-[#ECB390]/50'
+              }`}
             >
-              <span>👑                 {t('user.quickAdmin')}</span>
-              <span className="text-xs font-mono">ADMIN</span>
+              मराठी
             </button>
             <button
               type="button"
-              onClick={() => void handleQuickLogin('cashier', 'cashier123')}
-              disabled={loading}
-              className="flex w-full items-center justify-between rounded-xl border border-blue-300 bg-blue-50 px-4 py-3 text-left font-bold text-blue-900 hover:bg-blue-100 disabled:opacity-60"
+              onClick={() => handleLanguageChange('en')}
+              className={`rounded px-2.5 py-1 text-xs font-bold transition font-english ${
+                !isMarathi
+                  ? 'bg-[#DF7861] text-[#FCF8E8] shadow-xs'
+                  : 'text-[#3D251E] hover:bg-[#ECB390]/50'
+              }`}
             >
-              <span>🧾                 {t('user.quickCashier')}</span>
-              <span className="text-xs font-mono">CASHIER</span>
+              English
             </button>
           </div>
-
-          <div className="relative my-4 text-center">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-stone-200" />
-            </div>
-            <span className="relative bg-[#fbfaf8] px-2 text-xs font-bold text-stone-400">
-              {t('login.orCredentials')}
-            </span>
-          </div>
-
-          <form onSubmit={handleLogin} className="space-y-4">
-            <label className="block space-y-1">
-              <span className="text-sm font-bold text-stone-700">              {t('user.username')}</span>
-              <input
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-stone-500"
-              />
-            </label>
-
-            <label className="block space-y-1">
-              <span className="text-sm font-bold text-stone-700">              {t('user.password')}</span>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-stone-500"
-              />
-            </label>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-xl bg-stone-900 px-5 py-3 text-sm font-black text-white hover:bg-stone-800 disabled:opacity-60"
-            >
-              {loading ? t('login.loading') : t('user.loginButton')}
-            </button>
-          </form>
         </div>
+
+        <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-[#3D251E]">
+          {t('login.title')}
+        </h2>
+
+        {loginError && (
+          <div className="mb-3 rounded border border-[#DF7861] bg-[#ECB390]/40 p-2.5 text-xs font-bold text-[#B93829]">
+            {loginError}
+          </div>
+        )}
+
+        {/* Quick Switch Buttons */}
+        <div className="mb-4 space-y-1.5">
+          <div className="text-[11px] font-bold text-[#7A6258]">
+            {t('login.quickSwitch')}
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleQuickLogin('admin', 'admin123')}
+            disabled={loading}
+            className="flex w-full items-center justify-between rounded border border-[#ECB390] bg-[#ECDFC8] px-3.5 py-2 text-left text-xs font-bold text-[#3D251E] hover:bg-[#ECB390] disabled:opacity-60"
+          >
+            <span className="flex items-center gap-1.5">
+              <LuUserCheck className="h-3.5 w-3.5 text-[#DF7861]" />
+              <span>{t('user.quickAdmin')}</span>
+            </span>
+            <span className="rounded bg-[#DF7861] px-2 py-0.5 text-[10px] font-bold text-[#FCF8E8] font-english">
+              {t('user.roleAdmin')}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleQuickLogin('cashier', 'cashier123')}
+            disabled={loading}
+            className="flex w-full items-center justify-between rounded border border-[#ECB390] bg-[#ECDFC8]/60 px-3.5 py-2 text-left text-xs font-bold text-[#3D251E] hover:bg-[#ECB390] disabled:opacity-60"
+          >
+            <span className="flex items-center gap-1.5">
+              <LuUserCheck className="h-3.5 w-3.5 text-[#5C4338]" />
+              <span>{t('user.quickCashier')}</span>
+            </span>
+            <span className="rounded border border-[#ECB390] bg-[#FCF8E8] px-2 py-0.5 text-[10px] font-bold text-[#3D251E] font-english">
+              {t('user.roleCashier')}
+            </span>
+          </button>
+        </div>
+
+        <div className="relative my-3 text-center">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-[#ECB390]" />
+          </div>
+          <span className="relative bg-[#FCF8E8] px-2 text-[11px] font-bold text-[#7A6258]">
+            {t('login.orCredentials')}
+          </span>
+        </div>
+
+        <form onSubmit={handleLogin} className="space-y-3">
+          <label className="block space-y-1">
+            <span className="text-xs font-bold text-[#3D251E]">
+              {t('user.username')}
+            </span>
+            <input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              className="w-full rounded border border-[#ECB390] bg-white px-3 py-2 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+            />
+          </label>
+
+          <label className="block space-y-1">
+            <span className="text-xs font-bold text-[#3D251E]">
+              {t('user.password')}
+            </span>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="w-full rounded border border-[#ECB390] bg-white px-3 py-2 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861]"
+            />
+          </label>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex w-full items-center justify-center gap-1.5 rounded bg-[#DF7861] px-5 py-2.5 text-xs font-bold text-[#FCF8E8] hover:bg-[#c9624c] disabled:opacity-60"
+          >
+            <LuKeyRound className="h-3.5 w-3.5" />
+            <span>{loading ? t('login.loading') : t('user.loginButton')}</span>
+          </button>
+        </form>
       </div>
     </div>
   )

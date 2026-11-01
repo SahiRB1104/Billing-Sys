@@ -4,25 +4,83 @@ import React, {
   useState,
   useEffect,
   useMemo,
+  useCallback,
+  useRef,
   type ReactNode,
 } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Product, Bill, InvoiceDetail, CartItem, FrequentProduct, CurrentUser } from '../types'
-import { searchMatchesProduct, transliterateText } from '../utils/transliteration'
+import type {
+  Product,
+  Bill,
+  InvoiceDetail,
+  CartItem,
+  HeldBillEntry,
+  FrequentProduct,
+  CurrentUser,
+  StoreSettings,
+  PaymentSettings,
+  StaffUser,
+  DashboardStats,
+  ToastMessage,
+  ToastType,
+} from '../types'
+import {
+  searchMatchesProduct,
+  transliterateText,
+  devanagariToEnglishApprox,
+  localizeDynamicText,
+} from '../utils/transliteration'
 import {
   CUSTOM_PACK_OPTION,
   PACK_QUANTITY_OPTIONS,
   isValidPackQuantity,
+  formatProductName,
 } from '../constants/productOptions'
 
 const API_URL = 'http://localhost:8000'
 
 interface WorkspaceContextType {
-  // Data
+  // Store & Payment Configuration
+  storeSettings: StoreSettings | null
+  paymentSettings: PaymentSettings | null
+  fetchStoreSettings: () => Promise<void>
+  updateStoreSettings: (payload: Partial<StoreSettings>) => Promise<boolean>
+  fetchPaymentSettings: () => Promise<void>
+  updatePaymentSettings: (payload: Partial<PaymentSettings>) => Promise<boolean>
+
+  // Staff Management
+  staffList: StaffUser[]
+  staffLoading: boolean
+  fetchStaffList: () => Promise<void>
+  fetchNextEmployeeCode: (role: string) => Promise<string>
+  createStaffMember: (data: any) => Promise<boolean>
+  updateStaffMember: (userId: number, data: any) => Promise<boolean>
+  toggleStaffStatus: (userId: number) => Promise<boolean>
+  sendStaffResetOtp: (
+    userId: number,
+  ) => Promise<{ sent: boolean; otp_preview?: string; masked_mobile?: string } | null>
+  resetStaffPassword: (userId: number, newPass: string, otpCode?: string) => Promise<boolean>
+  uploadStaffDocument: (
+    userId: number,
+    fileData: { original_name: string; mime_type: string; document_data: string },
+  ) => Promise<boolean>
+  downloadDatabaseBackup: () => Promise<void>
+
+  // Dashboard Stats
+  dashboardStats: DashboardStats | null
+  dashboardLoading: boolean
+  fetchDashboardStats: () => Promise<void>
+
+  // Products & Catalog
   products: Product[]
   bills: Bill[]
+  filteredBills: Bill[]
+  creditBills: Bill[]
   frequentProducts: FrequentProduct[]
   cart: CartItem[]
+  heldCart: CartItem[]
+  heldBills: HeldBillEntry[]
+  lastAddedItem: CartItem | null
 
   // Search
   search: string
@@ -31,20 +89,63 @@ interface WorkspaceContextType {
   searchPreviewDevanagari: string
 
   // Cart actions
-  addToCart: (product: Product) => void
+  addToCart: (product: Product, customQty?: number) => void
   updateCartQty: (productId: number, quantity: number) => void
+  updateCartDiscount: (productId: number, discount: number) => void
+  clearCart: () => void
+  holdCurrentBill: () => void
+  recallHeldBill: (id?: string) => void
+  discardHeldBill: (id: string) => void
 
-  // Cart calculations
+  // Cart & Tax Calculations
   cartSubtotal: number
+  taxableTotal: number
+  cgstTotal: number
+  sgstTotal: number
   gstTotal: number
   cartTotal: number
+  totalMrpSavings: number
+  totalQtyCount: number
+  billDiscount: number
+  setBillDiscount: (d: number) => void
 
-  // Payment
+  // Customer & Payment Checkout Details
+  customerName: string
+  setCustomerName: (val: string) => void
+  customerPhone: string
+  setCustomerPhone: (val: string) => void
+  cashTendered: string
+  setCashTendered: (val: string) => void
+  changeReturned: number
+  paymentReference: string
+  setPaymentReference: (val: string) => void
   selectedPayment: string
   setSelectedPayment: (method: string) => void
-  saveBill: () => void
+  initialPaidAmount: string
+  setInitialPaidAmount: (val: string) => void
+  initialPaymentMode: string
+  setInitialPaymentMode: (val: string) => void
 
-  // Invoices
+  // UPI Flow & Modal
+  upiModalOpen: boolean
+  setUpiModalOpen: (open: boolean) => void
+  upiUriData: {
+    upi_uri: string
+    payee_name: string
+    upi_id: string
+    amount: number
+    has_static_qr?: boolean
+    static_qr_image?: string
+  } | null
+  openUpiPaymentModal: () => Promise<void>
+
+  // Checkout commit
+  saveBill: (overrideOptions?: {
+    payment_method?: string
+    payment_reference?: string
+  }) => Promise<void>
+
+  // Invoices & History
   invoiceSearch: string
   setInvoiceSearch: (val: string) => void
   invoiceDateFilter: 'all' | 'today' | 'range'
@@ -54,14 +155,51 @@ interface WorkspaceContextType {
   invoiceEndDate: string
   setInvoiceEndDate: (val: string) => void
   invoiceLoading: boolean
+  fetchInvoices: (
+    filterOverride?: 'all' | 'today' | 'range',
+    startOverride?: string,
+    endOverride?: string,
+  ) => Promise<void>
   selectedInvoice: InvoiceDetail | null
   setSelectedInvoice: (inv: InvoiceDetail | null) => void
   invoiceToPrint: InvoiceDetail | null
   setInvoiceToPrint: (inv: InvoiceDetail | null) => void
   openInvoiceDetail: (invoice: Bill) => void
   cancelInvoice: (invoiceId: number) => void
-  printInvoice: (invoice: InvoiceDetail | null) => void
-  fetchInvoices: () => void
+  returnInvoiceItems: (
+    invoiceId: number,
+    items: Array<{ invoice_item_id: number; return_quantity: number }>,
+    reason?: string,
+  ) => Promise<boolean>
+  fetchCreditBills: () => Promise<void>
+  settleCreditBill: (
+    invoiceId: number,
+    amount: number,
+    paymentMode: string,
+    note?: string,
+  ) => Promise<boolean>
+  printInvoice: (invoice?: InvoiceDetail | null) => void
+  exportInvoicesCsv: () => Promise<void>
+
+  // Custom Confirmation Modal (replaces browser window.confirm)
+  confirmDialog: {
+    open: boolean
+    title: string
+    message: string
+    confirmLabel?: string
+    cancelLabel?: string
+    danger?: boolean
+    onConfirm: () => void
+  } | null
+  requestConfirm: (options: {
+    title: string
+    message: string
+    confirmLabel?: string
+    cancelLabel?: string
+    danger?: boolean
+    onConfirm: () => void
+  }) => void
+  closeConfirmDialog: () => void
 
   // Label / Barcode
   labelToPrint: Product | null
@@ -118,7 +256,7 @@ interface WorkspaceContextType {
   setFormLowStockLevel: (val: number) => void
   createProduct: (e: React.FormEvent<HTMLFormElement>) => void
 
-  // Cashier Form
+  // Cashier Form (legacy backward compatibility)
   cashierName: string
   setCashierName: (val: string) => void
   cashierUsername: string
@@ -127,9 +265,12 @@ interface WorkspaceContextType {
   setCashierPassword: (val: string) => void
   submitCashierForm: (event: React.FormEvent<HTMLFormElement>) => void
 
-  // Status
+  // Floating Toasts & Status
   statusText: string
-  setStatusText: (val: string) => void
+  setStatusText: (val: string, type?: ToastType) => void
+  notify: (message: string, type?: ToastType) => void
+  toasts: ToastMessage[]
+  dismissToast: (id: string) => void
 
   // Auth
   token: string
@@ -149,31 +290,173 @@ export const useWorkspace = () => {
   return ctx
 }
 
+function inferToastType(message: string): ToastType {
+  const lower = message.toLowerCase()
+  if (
+    lower.includes('error') ||
+    lower.includes('failed') ||
+    lower.includes('insufficient') ||
+    lower.includes('not found') ||
+    lower.includes('invalid') ||
+    lower.includes('त्रुटी') ||
+    lower.includes('अपुरा') ||
+    lower.includes('नाही') ||
+    lower.includes('अयशस्वी')
+  ) {
+    return 'error'
+  }
+  if (
+    lower.includes('required') ||
+    lower.includes('empty') ||
+    lower.includes('only admin') ||
+    lower.includes('hold') ||
+    lower.includes('रिकाम') ||
+    lower.includes('आवश्यक') ||
+    lower.includes('थांबव')
+  ) {
+    return 'warning'
+  }
+  if (lower.includes('printing') || lower.includes('saving') || lower.includes('प्रिंट होत')) {
+    return 'info'
+  }
+  return 'success'
+}
+
 export const WorkspaceProvider: React.FC<{
   children: ReactNode
   token: string
   currentUser: CurrentUser | null
 }> = ({ children, token, currentUser }) => {
-  // Data
+  const { t, i18n } = useTranslation()
+  const isCurrentLangMr = i18n.language === 'mr' || i18n.language.startsWith('mr')
+
+  // Floating Toast Notifications State
+  const [statusText, setRawStatusText] = useState('')
+  const [toasts, setToasts] = useState<ToastMessage[]>([])
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((item) => item.id !== id))
+  }, [])
+
+  const notify = useCallback(
+    (message: string, explicitType?: ToastType) => {
+      if (!message || !message.trim()) {
+        setRawStatusText('')
+        return
+      }
+      const type = explicitType || inferToastType(message)
+      const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+      setRawStatusText(message)
+      setToasts((prev) => [{ id, message, type, createdAt: Date.now() }, ...prev].slice(0, 3))
+
+      window.setTimeout(() => {
+        setToasts((prev) => prev.filter((item) => item.id !== id))
+      }, 3400)
+    },
+    [],
+  )
+
+  const setStatusText = useCallback(
+    (val: string, type?: ToastType) => {
+      if (!val) {
+        setRawStatusText('')
+        setToasts([])
+        return
+      }
+      notify(val, type)
+    },
+    [notify],
+  )
+
+  // Store & Payment Configuration
+  const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null)
+  const [paymentSettings, setPaymentSettings] = useState<PaymentSettings | null>(null)
+
+  // Staff Management
+  const [staffList, setStaffList] = useState<StaffUser[]>([])
+  const [staffLoading, setStaffLoading] = useState(false)
+
+  // Dashboard Stats
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null)
+  const [dashboardLoading, setDashboardLoading] = useState(false)
+
+  // Catalog Products & Invoices
   const [products, setProducts] = useState<Product[]>([])
   const [bills, setBills] = useState<Bill[]>([])
+  const [creditBills, setCreditBills] = useState<Bill[]>([])
   const [frequentProducts, setFrequentProducts] = useState<FrequentProduct[]>([])
-  const [cart, setCart] = useState<CartItem[]>([])
 
-  // Search
+  // Cart & Held Bills Queue (Up to 5 held bills)
+  const [cart, setCart] = useState<CartItem[]>([])
+  const [heldBills, setHeldBills] = useState<HeldBillEntry[]>([])
+  const heldCart = useMemo(() => heldBills[0]?.items || [], [heldBills])
+  const [lastAddedItem, setLastAddedItem] = useState<CartItem | null>(null)
+  const [billDiscount, setBillDiscount] = useState<number>(0)
+
+  // Custom Confirmation Dialog State (replaces native browser window.confirm)
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean
+    title: string
+    message: string
+    confirmLabel?: string
+    cancelLabel?: string
+    danger?: boolean
+    onConfirm: () => void
+  } | null>(null)
+
+  const requestConfirm = useCallback(
+    (options: {
+      title: string
+      message: string
+      confirmLabel?: string
+      cancelLabel?: string
+      danger?: boolean
+      onConfirm: () => void
+    }) => {
+      setConfirmDialog({
+        open: true,
+        ...options,
+      })
+    },
+    [],
+  )
+
+  const closeConfirmDialog = useCallback(() => {
+    setConfirmDialog(null)
+  }, [])
+
+  // Checkout Customer & Payment
+  const [customerName, setCustomerName] = useState('')
+  const [customerPhone, setCustomerPhone] = useState('')
+  const [cashTendered, setCashTendered] = useState('')
+  const [paymentReference, setPaymentReference] = useState('')
+  const [selectedPayment, setSelectedPayment] = useState('CASH')
+  const [initialPaidAmount, setInitialPaidAmount] = useState('')
+  const [initialPaymentMode, setInitialPaymentMode] = useState('CASH')
+
+  // UPI Flow & Modal
+  const [upiModalOpen, setUpiModalOpen] = useState(false)
+  const [upiUriData, setUpiUriData] = useState<{
+    upi_uri: string
+    payee_name: string
+    upi_id: string
+    amount: number
+    has_static_qr?: boolean
+    static_qr_image?: string
+  } | null>(null)
+
+  // Search & Filters
   const [search, setSearch] = useState('')
   const [invoiceSearch, setInvoiceSearch] = useState('')
   const [invoiceDateFilter, setInvoiceDateFilter] = useState<'all' | 'today' | 'range'>('all')
   const [invoiceStartDate, setInvoiceStartDate] = useState('')
   const [invoiceEndDate, setInvoiceEndDate] = useState('')
   const [invoiceLoading, setInvoiceLoading] = useState(false)
+  const invoicesReqIdRef = useRef(0)
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceDetail | null>(null)
   const [invoiceToPrint, setInvoiceToPrint] = useState<InvoiceDetail | null>(null)
 
-  // Payment
-  const [selectedPayment, setSelectedPayment] = useState('CASH')
-
-  // Label / Barcode
+  // Barcode Label Print
   const [labelToPrint, setLabelToPrint] = useState<Product | null>(null)
   const [labelCount, setLabelCount] = useState(1)
   const [labelDialogProduct, setLabelDialogProduct] = useState<Product | null>(null)
@@ -198,146 +481,738 @@ export const WorkspaceProvider: React.FC<{
   const [formSellingPrice, setFormSellingPrice] = useState(0)
   const [formMrp, setFormMrp] = useState(0)
   const [formGstRate, setFormGstRate] = useState(5)
-  const [formCurrentStock, setFormCurrentStock] = useState(10)
-  const [formLowStockLevel, setFormLowStockLevel] = useState(2)
+  const [formCurrentStock, setFormCurrentStock] = useState(0)
+  const [formLowStockLevel, setFormLowStockLevel] = useState(0)
 
-  // Cashier Form
+  // Legacy cashier form fields
   const [cashierName, setCashierName] = useState('')
   const [cashierUsername, setCashierUsername] = useState('')
   const [cashierPassword, setCashierPassword] = useState('')
 
-  // Status
-  const [statusText, setStatusText] = useState('')
+  // ── Store Settings API ─────────────────────────────────────────────
 
-  const { i18n } = useTranslation()
-  const isCurrentLangMr = i18n.language === 'mr' || i18n.language.startsWith('mr')
-
-  const loadFrequentProducts = async (authToken: string = token) => {
-    if (!authToken) return
-    try {
-      const response = await fetch(`${API_URL}/products/frequent`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      })
-      if (!response.ok) return
-      const data: FrequentProduct[] = await response.json()
-      setFrequentProducts(data)
-    } catch (error) {
-      console.error(error)
-    }
-  }
-
-  const fetchInvoices = async () => {
+  const fetchStoreSettings = async () => {
     if (!token) return
-    setInvoiceLoading(true)
     try {
-      const params = new URLSearchParams()
-      if (invoiceSearch.trim()) params.set('search', invoiceSearch.trim())
-      if (invoiceDateFilter === 'today') params.set('date_filter', 'today')
-      if (invoiceDateFilter === 'range') {
-        if (invoiceStartDate) params.set('start_date', invoiceStartDate)
-        if (invoiceEndDate) params.set('end_date', invoiceEndDate)
-      }
-
-      const response = await fetch(`${API_URL}/invoices${params.toString() ? `?${params.toString()}` : ''}`, {
+      const res = await fetch(`${API_URL}/api/settings/store`, {
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (!response.ok) throw new Error('Failed to load invoices')
-
-      const data: Bill[] = await response.json()
-      setBills(
-        data.map((invoice) => ({
-          ...invoice,
-          amount: Number(invoice.amount ?? invoice.subtotal ?? 0),
-          payment_method: invoice.payment_method ?? 'CASH',
-          status: invoice.status ?? 'COMPLETED',
-          date: invoice.date ?? new Date().toISOString(),
-        })),
-      )
-    } catch (error) {
-      console.error(error)
-      setStatusText('बिल इतिहास लोड करण्यत त्रुटी आली.')
-    } finally {
-      setInvoiceLoading(false)
+      if (res.ok) {
+        const data = await res.json()
+        setStoreSettings(data)
+      }
+    } catch (err) {
+      console.error('Failed to load store settings', err)
     }
   }
 
-  const refreshWorkspaceData = async () => {
+  const updateStoreSettings = async (payload: Partial<StoreSettings>): Promise<boolean> => {
+    if (!token) return false
+    try {
+      const res = await fetch(`${API_URL}/api/settings/store`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: t('msg.storeSaveError') }))
+        notify(localizeDynamicText(err.detail, isCurrentLangMr) || t('msg.storeSaveError'), 'error')
+        return false
+      }
+      const data = await res.json()
+      setStoreSettings(data)
+      notify(t('msg.storeSaved'), 'success')
+      return true
+    } catch (err) {
+      console.error(err)
+      notify(t('msg.storeSaveError'), 'error')
+      return false
+    }
+  }
+
+  // ── Payment Settings API ───────────────────────────────────────────
+
+  const fetchPaymentSettings = async () => {
     if (!token) return
-    const productsResponse = await fetch(`${API_URL}/products`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (productsResponse.ok) {
-      setProducts(await productsResponse.json())
+    try {
+      const res = await fetch(`${API_URL}/api/settings/payment`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setPaymentSettings(data)
+      }
+    } catch (err) {
+      console.error('Failed to load payment settings', err)
     }
-    await fetchInvoices()
-    await loadFrequentProducts()
   }
 
-  // Load data when token becomes available
+  const updatePaymentSettings = async (payload: Partial<PaymentSettings>): Promise<boolean> => {
+    if (!token) return false
+    try {
+      const res = await fetch(`${API_URL}/api/settings/payment`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: t('msg.paymentSaveError') }))
+        notify(localizeDynamicText(err.detail, isCurrentLangMr) || t('msg.paymentSaveError'), 'error')
+        return false
+      }
+      const data = await res.json()
+      setPaymentSettings(data)
+      notify(t('msg.paymentSaved'), 'success')
+      return true
+    } catch (err) {
+      console.error(err)
+      notify(t('msg.paymentSaveError'), 'error')
+      return false
+    }
+  }
+
+  // ── Staff Management API ───────────────────────────────────────────
+
+  const fetchStaffList = async () => {
+    if (!token || currentUser?.role !== 'ADMIN') return
+    try {
+      setStaffLoading(true)
+      const res = await fetch(`${API_URL}/admin/staff`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setStaffList(data)
+      }
+    } catch (err) {
+      console.error('Failed to load staff list', err)
+    } finally {
+      setStaffLoading(false)
+    }
+  }
+
+  const createStaffMember = async (data: any): Promise<boolean> => {
+    if (!token || currentUser?.role !== 'ADMIN') return false
+    try {
+      const res = await fetch(`${API_URL}/admin/staff`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: t('msg.staffCreateError') }))
+        notify(localizeDynamicText(err.detail, isCurrentLangMr) || t('msg.staffCreateError'), 'error')
+        return false
+      }
+      await fetchStaffList()
+      notify(t('msg.staffCreated', { name: data.name }), 'success')
+      return true
+    } catch (err) {
+      console.error(err)
+      notify(t('msg.staffCreateError'), 'error')
+      return false
+    }
+  }
+
+  const updateStaffMember = async (userId: number, data: any): Promise<boolean> => {
+    if (!token || currentUser?.role !== 'ADMIN') return false
+    try {
+      const res = await fetch(`${API_URL}/admin/staff/${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: t('msg.staffUpdateError') }))
+        notify(localizeDynamicText(err.detail, isCurrentLangMr) || t('msg.staffUpdateError'), 'error')
+        return false
+      }
+      await fetchStaffList()
+      notify(t('msg.staffUpdated'), 'success')
+      return true
+    } catch (err) {
+      console.error(err)
+      notify(t('msg.staffUpdateError'), 'error')
+      return false
+    }
+  }
+
+  const toggleStaffStatus = async (userId: number): Promise<boolean> => {
+    if (!token || currentUser?.role !== 'ADMIN') return false
+    try {
+      const res = await fetch(`${API_URL}/admin/staff/${userId}/status`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: t('msg.staffUpdateError') }))
+        notify(localizeDynamicText(err.detail, isCurrentLangMr) || t('msg.staffUpdateError'), 'error')
+        return false
+      }
+      await fetchStaffList()
+      notify(t('msg.staffStatusChanged'), 'success')
+      return true
+    } catch (err) {
+      console.error(err)
+      return false
+    }
+  }
+
+  const sendStaffResetOtp = async (
+    userId: number,
+  ): Promise<{ sent: boolean; otp_preview?: string; masked_mobile?: string } | null> => {
+    if (!token || currentUser?.role !== 'ADMIN') return null
+    try {
+      const res = await fetch(`${API_URL}/admin/staff/${userId}/send-reset-otp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: t('msg.passwordResetError') }))
+        notify(localizeDynamicText(err.detail, isCurrentLangMr) || t('msg.passwordResetError'), 'error')
+        return null
+      }
+      const data = await res.json()
+      notify(
+        isCurrentLangMr
+          ? `कॅशियरच्या मोबाईलवर OTP पाठवला (${data.masked_mobile || ''})`
+          : `OTP sent to cashier mobile (${data.masked_mobile || ''})`,
+        'info',
+      )
+      return data
+    } catch (err) {
+      console.error(err)
+      notify(t('msg.passwordResetError'), 'error')
+      return null
+    }
+  }
+
+  const resetStaffPassword = async (
+    userId: number,
+    newPass: string,
+    otpCode?: string,
+  ): Promise<boolean> => {
+    if (!token || currentUser?.role !== 'ADMIN') return false
+    try {
+      const res = await fetch(`${API_URL}/admin/staff/${userId}/reset-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ new_password: newPass, otp_code: otpCode || '' }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: t('msg.passwordResetError') }))
+        notify(localizeDynamicText(err.detail, isCurrentLangMr) || t('msg.passwordResetError'), 'error')
+        return false
+      }
+      notify(t('msg.passwordResetSuccess'), 'success')
+      return true
+    } catch (err) {
+      console.error(err)
+      return false
+    }
+  }
+
+  const uploadStaffDocument = async (
+    userId: number,
+    fileData: { original_name: string; mime_type: string; document_data: string },
+  ): Promise<boolean> => {
+    if (!token || currentUser?.role !== 'ADMIN') return false
+    try {
+      const res = await fetch(`${API_URL}/admin/staff/${userId}/documents`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(fileData),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: t('msg.docUploadError') }))
+        notify(localizeDynamicText(err.detail, isCurrentLangMr) || t('msg.docUploadError'), 'error')
+        return false
+      }
+      await fetchStaffList()
+      notify(t('msg.docUploaded', { name: fileData.original_name }), 'success')
+      return true
+    } catch (err) {
+      console.error(err)
+      return false
+    }
+  }
+
+  const fetchNextEmployeeCode = async (role: string = 'CASHIER'): Promise<string> => {
+    if (!token || currentUser?.role !== 'ADMIN') return 'EMP-001'
+    try {
+      const res = await fetch(
+        `${API_URL}/admin/staff/next-code?role=${encodeURIComponent(role)}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      )
+      if (res.ok) {
+        const data = await res.json()
+        if (data?.staff_id) return String(data.staff_id)
+      }
+    } catch (err) {
+      console.error('Failed to fetch next employee code', err)
+    }
+    return role === 'ADMIN' ? 'ADM-001' : 'EMP-001'
+  }
+
+  const downloadDatabaseBackup = async (): Promise<void> => {
+    if (!token || currentUser?.role !== 'ADMIN') return
+    try {
+      const res = await fetch(`${API_URL}/admin/database/backup`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error('Backup failed')
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `store_backup_${new Date().toISOString().slice(0, 10)}.db`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+      notify('Offline SQLite database backup downloaded.', 'success')
+    } catch (err) {
+      console.error(err)
+      notify('Failed to download database backup.', 'error')
+    }
+  }
+
+  // ── Dashboard Stats API ────────────────────────────────────────────
+
+  const fetchDashboardStats = async () => {
+    if (!token) return
+    try {
+      setDashboardLoading(true)
+      const res = await fetch(`${API_URL}/api/dashboard/stats`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setDashboardStats(data)
+      }
+    } catch (err) {
+      console.error('Failed to load dashboard stats', err)
+    } finally {
+      setDashboardLoading(false)
+    }
+  }
+
+  // ── Products & Invoices API ────────────────────────────────────────
+
+  const fetchProducts = async () => {
+    if (!token) return
+    try {
+      const res = await fetch(`${API_URL}/products`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setProducts(data)
+      }
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const loadFrequentProducts = async () => {
+    if (!token) return
+    try {
+      const res = await fetch(`${API_URL}/products/frequent?limit=8`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setFrequentProducts(data)
+      }
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const fetchInvoices = async (
+    filterOverride?: 'all' | 'today' | 'range',
+    startOverride?: string,
+    endOverride?: string,
+  ) => {
+    if (!token) return
+    const activeReqId = ++invoicesReqIdRef.current
+    setInvoiceLoading(true)
+    try {
+      const activeFilter = filterOverride !== undefined ? filterOverride : invoiceDateFilter
+      const activeStart = startOverride !== undefined ? startOverride : invoiceStartDate
+      const activeEnd = endOverride !== undefined ? endOverride : invoiceEndDate
+
+      const params = new URLSearchParams()
+      if (activeFilter === 'today') {
+        params.append('date_filter', 'today')
+      } else if (activeFilter === 'range') {
+        if (activeStart) params.append('start_date', activeStart)
+        if (activeEnd) params.append('end_date', activeEnd)
+      }
+      const res = await fetch(`${API_URL}/invoices?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (activeReqId === invoicesReqIdRef.current) {
+          setBills(data)
+        }
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      if (activeReqId === invoicesReqIdRef.current) {
+        setInvoiceLoading(false)
+      }
+    }
+  }
+
+  const fetchCreditBills = async () => {
+    if (!token) return
+    try {
+      const res = await fetch(`${API_URL}/credits`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setCreditBills(data)
+      }
+    } catch (err) {
+      console.error('Failed to load credit bills', err)
+    }
+  }
+
+  // Live instant client-side filter for Bills (updates on every keystroke without hitting Enter)
+  const filteredBills = useMemo(() => {
+    const q = invoiceSearch.trim().toLowerCase()
+    if (!q) return bills
+    const devanagariQ = transliterateText(q).toLowerCase()
+    const phoneticQ = devanagariToEnglishApprox(q).toLowerCase()
+
+    return bills.filter((bill) => {
+      const invNum = (bill.invoice_number || '').toLowerCase()
+      const custName = (bill.customer_name || '').toLowerCase()
+      const custNameMr = transliterateText(bill.customer_name || '').toLowerCase()
+      const custNameEn = devanagariToEnglishApprox(bill.customer_name || '').toLowerCase()
+      const custPhone = (bill.customer_phone || '').toLowerCase()
+      const payMethod = (bill.payment_method || '').toLowerCase()
+      const status = (bill.status === 'VOIDED' ? 'cancelled' : (bill.status || '')).toLowerCase()
+
+      return (
+        invNum.includes(q) ||
+        custName.includes(q) ||
+        custName.includes(devanagariQ) ||
+        custNameMr.includes(q) ||
+        custNameMr.includes(devanagariQ) ||
+        custNameEn.includes(q) ||
+        (phoneticQ && custName.includes(phoneticQ)) ||
+        (phoneticQ && custNameEn.includes(phoneticQ)) ||
+        (phoneticQ && invNum.includes(phoneticQ)) ||
+        custPhone.includes(q) ||
+        payMethod.includes(q) ||
+        status.includes(q)
+      )
+    })
+  }, [bills, invoiceSearch])
+
+  const exportInvoicesCsv = async () => {
+    if (!token) return
+    try {
+      const params = new URLSearchParams()
+      if (invoiceSearch.trim()) params.append('search', invoiceSearch.trim())
+      if (invoiceDateFilter === 'today') {
+        params.append('date_filter', 'today')
+      } else if (invoiceDateFilter === 'range') {
+        if (invoiceStartDate) params.append('start_date', invoiceStartDate)
+        if (invoiceEndDate) params.append('end_date', invoiceEndDate)
+      }
+      const res = await fetch(`${API_URL}/invoices/export?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error('Export failed')
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `invoices_export_${new Date().toISOString().slice(0, 10)}.csv`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+      notify(t('msg.csvExported'), 'success')
+    } catch (err) {
+      console.error(err)
+      notify(t('msg.csvExportError'), 'error')
+    }
+  }
+
+  const refreshWorkspaceData = () => {
+    void fetchProducts()
+    void loadFrequentProducts()
+    void fetchInvoices()
+    void fetchCreditBills()
+    void fetchStoreSettings()
+    void fetchPaymentSettings()
+    void fetchDashboardStats()
+    if (currentUser?.role === 'ADMIN') {
+      void fetchStaffList()
+    }
+  }
+
   useEffect(() => {
     if (token) {
-      void refreshWorkspaceData()
+      refreshWorkspaceData()
     }
   }, [token])
 
-  // Smart search
-  const filteredProducts = useMemo(() => {
-    if (!search.trim()) return []
-    return products.filter((product) => searchMatchesProduct(product, search)).slice(0, 12)
-  }, [products, search])
+  // ── Cart & Tax Calculations ────────────────────────────────────────
 
-  const searchPreviewDevanagari = useMemo(() => {
-    const trimmed = search.trim()
-    if (!trimmed || /[\u0900-\u097F]/.test(trimmed)) return ''
-    const converted = transliterateText(trimmed)
-    return converted !== trimmed ? converted : ''
-  }, [search])
+  const addToCart = (product: Product, customQty?: number) => {
+    const qtyToAdd = customQty !== undefined ? customQty : 1
+    const available = product.current_stock ?? 0
+    const existing = cart.find((item) => item.id === product.id)
+    const currentCartQty = existing ? existing.qty : 0
+    const displayName = formatProductName(product.name_mr, isCurrentLangMr)
 
-  // Cart
-  const addToCart = (product: Product) => {
-    const unitPrice = Number(product.selling_price ?? 0)
+    if (currentCartQty + qtyToAdd > available) {
+      notify(t('msg.outOfStock', { name: displayName, stock: available }), 'error')
+      return
+    }
+
+    const updatedItem: CartItem = {
+      id: product.id,
+      name: product.name_mr,
+      barcode: product.barcode,
+      unitDisplay: product.unit_display || '',
+      unitPrice: Number(product.selling_price ?? 0),
+      mrp: product.mrp ? Number(product.mrp) : Number(product.selling_price ?? 0),
+      qty: currentCartQty + qtyToAdd,
+      gst: Number(product.gst_rate ?? 0),
+      discount: existing?.discount ?? 0,
+      availableStock: available,
+    }
+
+    setLastAddedItem(updatedItem)
+
     setCart((current) => {
-      const existing = current.find((item) => item.id === product.id)
       if (existing) {
         return current.map((item) =>
-          item.id === product.id ? { ...item, qty: item.qty + 1 } : item,
+          item.id === product.id ? updatedItem : item,
         )
       }
-      return [
-        ...current,
-        {
-          id: product.id,
-          name: product.name_mr,
-          unitDisplay: product.unit_display || '',
-          unitPrice,
-          qty: 1,
-          gst: Number(product.gst_rate ?? 0),
-        },
-      ]
+      return [...current, updatedItem]
     })
+
+    notify(t('msg.addedToCart', { name: displayName }), 'success')
   }
 
   const updateCartQty = (productId: number, quantity: number) => {
+    const product = products.find((p) => p.id === productId)
+    const available = product?.current_stock ?? 999999
+    const displayName = formatProductName(product?.name_mr || '', isCurrentLangMr)
+
+    if (quantity > available) {
+      notify(t('msg.outOfStock', { name: displayName, stock: available }), 'error')
+      quantity = available
+    }
+
     setCart((current) =>
       current
         .map((item) =>
-          item.id === productId ? { ...item, qty: Math.max(0, Math.floor(quantity) || 0) } : item,
+          item.id === productId ? { ...item, qty: Math.max(0, quantity) } : item,
         )
         .filter((item) => item.qty > 0),
     )
   }
 
-  const cartSubtotal = cart.reduce((sum, item) => sum + item.unitPrice * item.qty, 0)
-  const gstTotal = cart.reduce((sum, item) => sum + (item.unitPrice * item.qty * item.gst) / 100, 0)
-  const cartTotal = cartSubtotal + gstTotal
+  const updateCartDiscount = (productId: number, discount: number) => {
+    setCart((current) =>
+      current.map((item) =>
+        item.id === productId ? { ...item, discount: Math.max(0, discount) } : item,
+      ),
+    )
+  }
+
+  const clearCart = () => {
+    setCart([])
+    setLastAddedItem(null)
+    setBillDiscount(0)
+    setCustomerName('')
+    setCustomerPhone('')
+    setCashTendered('')
+    setPaymentReference('')
+    setInitialPaidAmount('')
+    setInitialPaymentMode('CASH')
+    notify(t('msg.cartCleared'), 'info')
+  }
+
+  const holdCurrentBill = () => {
+    if (cart.length === 0) {
+      if (heldBills.length > 0) {
+        recallHeldBill(heldBills[0].id)
+      } else {
+        notify(t('msg.cartEmpty'), 'warning')
+      }
+      return
+    }
+    if (heldBills.length >= 5) {
+      notify('Maximum 5 bills can be held at a time. Recall or discard one first.', 'warning')
+      return
+    }
+    const estTotal = cart.reduce(
+      (sum, item) => sum + Math.max(0, item.unitPrice * item.qty - (item.discount || 0)),
+      0,
+    )
+    const entry: HeldBillEntry = {
+      id: `hold-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      customerName: customerName.trim() || `Walk-in #${heldBills.length + 1}`,
+      customerPhone: customerPhone.trim(),
+      items: cart,
+      discount: billDiscount || 0,
+      heldAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      totalAmount: Math.max(0, Number((estTotal - (billDiscount || 0)).toFixed(2))),
+    }
+    setHeldBills((prev) => [entry, ...prev])
+    setCart([])
+    setLastAddedItem(null)
+    setBillDiscount(0)
+    setCustomerName('')
+    setCustomerPhone('')
+    notify(t('msg.billHeld', { count: cart.length }), 'warning')
+  }
+
+  const recallHeldBill = (id?: string) => {
+    if (heldBills.length === 0) {
+      notify(t('msg.noHeldBill'), 'warning')
+      return
+    }
+    const target = id ? heldBills.find((b) => b.id === id) || heldBills[0] : heldBills[0]
+    setCart(target.items)
+    setBillDiscount(target.discount || 0)
+    setCustomerName(target.customerName.startsWith('Walk-in #') ? '' : target.customerName)
+    setCustomerPhone(target.customerPhone || '')
+    setHeldBills((prev) => prev.filter((b) => b.id !== target.id))
+    notify(t('msg.billRecalled'), 'info')
+  }
+
+  const discardHeldBill = (id: string) => {
+    setHeldBills((prev) => prev.filter((b) => b.id !== id))
+    notify('Held bill removed from queue.', 'info')
+  }
+
+  // Respect storeSettings tax_inclusive configuration
+  const isTaxInclusive = storeSettings ? storeSettings.tax_inclusive : true
+
+  const {
+    cartSubtotal,
+    taxableTotal,
+    cgstTotal,
+    sgstTotal,
+    gstTotal,
+    cartTotal,
+    totalMrpSavings,
+    totalQtyCount,
+  } = useMemo(() => {
+    let rawSubtotal = 0
+    let totalTaxable = 0
+    let totalGst = 0
+    let mrpSavings = 0
+    let qtySum = 0
+
+    for (const item of cart) {
+      const lineRaw = item.unitPrice * item.qty - (item.discount || 0)
+      const lineTotal = Math.max(0, lineRaw)
+      const rate = item.gst || 0
+      const itemMrp = item.mrp && item.mrp > item.unitPrice ? item.mrp : item.unitPrice
+      mrpSavings += (itemMrp - item.unitPrice) * item.qty + (item.discount || 0)
+      qtySum += item.qty
+
+      if (isTaxInclusive) {
+        const taxable = rate > 0 ? lineTotal / (1 + rate / 100) : lineTotal
+        const tax = lineTotal - taxable
+        rawSubtotal += lineTotal
+        totalTaxable += taxable
+        totalGst += tax
+      } else {
+        const taxable = lineTotal
+        const tax = taxable * (rate / 100)
+        rawSubtotal += lineTotal + tax
+        totalTaxable += taxable
+        totalGst += tax
+      }
+    }
+
+    const finalTotal = Math.max(0, rawSubtotal - (billDiscount || 0))
+    const cgst = totalGst / 2
+    const sgst = totalGst / 2
+
+    return {
+      cartSubtotal: Number(rawSubtotal.toFixed(2)),
+      taxableTotal: Number(totalTaxable.toFixed(2)),
+      cgstTotal: Number(cgst.toFixed(2)),
+      sgstTotal: Number(sgst.toFixed(2)),
+      gstTotal: Number(totalGst.toFixed(2)),
+      cartTotal: Number(finalTotal.toFixed(2)),
+      totalMrpSavings: Number((mrpSavings + (billDiscount || 0)).toFixed(2)),
+      totalQtyCount: Number(qtySum.toFixed(2)),
+    }
+  }, [cart, billDiscount, isTaxInclusive])
+
+  const changeReturned = useMemo(() => {
+    const tendered = parseFloat(cashTendered)
+    if (isNaN(tendered) || tendered <= 0) return 0
+    return Math.max(0, Number((tendered - cartTotal).toFixed(2)))
+  }, [cashTendered, cartTotal])
+
+  // ── Product Search & Quick Add ─────────────────────────────────────
+
+  const searchPreviewDevanagari = useMemo(() => {
+    const trimmed = search.trim()
+    if (!trimmed) return ''
+    const transliterated = transliterateText(trimmed)
+    return transliterated !== trimmed ? transliterated : ''
+  }, [search])
+
+  const filteredProducts = useMemo(() => {
+    const trimmed = search.trim()
+    if (!trimmed) return products
+    return products.filter((product) => searchMatchesProduct(product, trimmed))
+  }, [products, search])
 
   const resolveProductFromSearch = (): Product | null => {
     const trimmed = search.trim()
     if (!trimmed) return null
     const normalized = trimmed.toLowerCase()
-    const barcodeMatch = products.find((product) => (product.barcode || '').toLowerCase() === normalized)
+    const barcodeMatch = products.find(
+      (product) => (product.barcode || '').toLowerCase() === normalized,
+    )
     if (barcodeMatch) return barcodeMatch
-    const exactNameMatch = products.find((product) => product.name_mr.trim().toLowerCase() === normalized)
+    const exactNameMatch = products.find(
+      (product) => product.name_mr.trim().toLowerCase() === normalized,
+    )
     if (exactNameMatch) return exactNameMatch
     return filteredProducts[0] ?? null
   }
@@ -345,25 +1220,98 @@ export const WorkspaceProvider: React.FC<{
   const handleSearchAdd = () => {
     const product = resolveProductFromSearch()
     if (!product) {
-      setStatusText('उत्पादन सापडले नाही.')
+      notify(t('msg.productNotFound', { query: search.trim() }), 'error')
       return
     }
     addToCart(product)
     setSearch('')
-    setStatusText(`${product.name_mr} कार्टमध्ये जोडले.`)
   }
 
-  const saveBill = async () => {
+  // ── UPI Modal Flow ─────────────────────────────────────────────────
+
+  const openUpiPaymentModal = async () => {
     if (!token || cart.length === 0) {
-      setStatusText('कार्ट रिकामी आहे.')
+      notify(t('msg.cartEmpty'), 'warning')
       return
     }
     try {
-      const payload = {
-        payment_method: selectedPayment,
-        discount: 0,
-        items: cart.map((item) => ({ product_id: item.id, quantity: item.qty, discount: 0 })),
+      const res = await fetch(`${API_URL}/api/payments/upi-uri?amount=${cartTotal}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: t('msg.upiConfigError') }))
+        notify(localizeDynamicText(err.detail, isCurrentLangMr) || t('msg.upiConfigError'), 'error')
+        return
       }
+      const data = await res.json()
+      setUpiUriData(data)
+      setUpiModalOpen(true)
+    } catch (err) {
+      console.error(err)
+      notify(t('msg.upiConfigError'), 'error')
+    }
+  }
+
+  // ── Checkout & Bill Commit ─────────────────────────────────────────
+
+  const saveBill = async (overrideOptions?: {
+    payment_method?: string
+    payment_reference?: string
+  }) => {
+    if (!token || cart.length === 0) {
+      notify(t('msg.cartEmpty'), 'warning')
+      return
+    }
+
+    const payMethod = overrideOptions?.payment_method || selectedPayment
+    const payRef = overrideOptions?.payment_reference || paymentReference
+
+    if (payMethod === 'CASH' && cashTendered.trim()) {
+      const tendered = parseFloat(cashTendered)
+      if (tendered < cartTotal) {
+        notify(t('msg.insufficientCash', { tendered, total: cartTotal }), 'error')
+        return
+      }
+    }
+
+    if (payMethod === 'CREDIT') {
+      const cleanPhone = customerPhone.replace(/\D/g, '')
+      if (!customerName.trim() || cleanPhone.length !== 10) {
+        notify(
+          isCurrentLangMr
+            ? 'उधारी बिलासाठी ग्राहकाचे नाव आणि १० अंकी मोबाईल क्रमांक आवश्यक आहे.'
+            : 'Customer Name and valid 10-digit Mobile Number are required for Udhari (Credit) bills.',
+          'warning',
+        )
+        return
+      }
+    }
+
+    const parsedInitialPaid =
+      payMethod === 'CREDIT' && initialPaidAmount.trim()
+        ? Math.max(0, Math.min(cartTotal, parseFloat(initialPaidAmount) || 0))
+        : 0
+
+    try {
+      const payload = {
+        payment_method: payMethod,
+        discount: billDiscount || 0,
+        items: cart.map((item) => ({
+          product_id: item.id,
+          quantity: item.qty,
+          discount: item.discount || 0,
+        })),
+        customer_name: customerName.trim() || null,
+        customer_phone: customerPhone.replace(/\D/g, '').slice(0, 10) || null,
+        payment_reference: payRef.trim() || null,
+        cash_tendered: cashTendered.trim() ? parseFloat(cashTendered) : null,
+        change_returned: changeReturned > 0 ? changeReturned : null,
+        initial_paid_amount: payMethod === 'CREDIT' ? parsedInitialPaid : null,
+        initial_payment_mode: payMethod === 'CREDIT' ? initialPaymentMode : null,
+        idempotency_key: `pos-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      }
+
+      notify(t('msg.savingBill'), 'info')
       const response = await fetch(`${API_URL}/bills`, {
         method: 'POST',
         headers: {
@@ -372,58 +1320,57 @@ export const WorkspaceProvider: React.FC<{
         },
         body: JSON.stringify(payload),
       })
+
       if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(errorText)
+        const errorData = await response.json().catch(() => ({ detail: t('msg.billFailed') }))
+        throw new Error(errorData.detail || t('msg.billFailed'))
       }
+
       const data = await response.json()
       setCart([])
+      setLastAddedItem(null)
+      setBillDiscount(0)
+      setCustomerName('')
+      setCustomerPhone('')
+      setCashTendered('')
+      setPaymentReference('')
+      setInitialPaidAmount('')
+      setInitialPaymentMode('CASH')
+      setUpiModalOpen(false)
 
-      const invoiceListResponse = await fetch(`${API_URL}/invoices?search=${encodeURIComponent(data.invoice_number)}`, {
+      notify(t('msg.billCompleted', { number: data.invoice_number }), 'success')
+
+      // Fetch invoice detail for receipt printing
+      const detailResponse = await fetch(`${API_URL}/invoices/${data.id}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (invoiceListResponse.ok) {
-        const invoiceMatches = await invoiceListResponse.json()
-        const latestInvoice = invoiceMatches.find((item: Bill) => item.invoice_number === data.invoice_number)
-        if (latestInvoice) {
-          const detailResponse = await fetch(`${API_URL}/invoices/${latestInvoice.id}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          })
-          if (detailResponse.ok) {
-            const invoiceDetail: InvoiceDetail = await detailResponse.json()
-            setSelectedInvoice(invoiceDetail)
-            printInvoiceWithDialog(invoiceDetail, `बिल जतन झाले: ${data.invoice_number}`)
-          }
-        }
+      if (detailResponse.ok) {
+        const invoiceDetail: InvoiceDetail = await detailResponse.json()
+        setSelectedInvoice(invoiceDetail)
+        printInvoiceWithDialog(invoiceDetail)
       }
-      void refreshWorkspaceData()
-    } catch (error) {
+
+      refreshWorkspaceData()
+    } catch (error: any) {
       console.error(error)
-      setStatusText('बिल तयार करण्यात त्रुटी आली.')
+      notify(localizeDynamicText(error.message, isCurrentLangMr) || t('msg.billFailed'), 'error')
     }
   }
 
-  /**
-   * Renders the print-only receipt (already mounted off-screen in AppShell),
-   * waits for React to commit the DOM, then invokes the browser print dialog.
-   * The receipt stays mounted until afterprint (print or cancel) restores the UI.
-   */
-  const printInvoiceWithDialog = (invoice: InvoiceDetail | null, successMessage: string) => {
+  const printInvoiceWithDialog = (invoice: InvoiceDetail | null, announceOpening = false) => {
     if (!invoice) return
     setInvoiceToPrint(invoice)
-    setStatusText('प्रिंट होत आहे...')
+    if (announceOpening) {
+      notify(t('msg.printingReceipt'), 'info')
+    }
     if (typeof window.print !== 'function') {
-      console.error('window.print is not available')
-      setStatusText(successMessage)
       return
     }
-    // Wait two frames so the receipt is rendered/laid out before capturing for print.
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         const afterPrint = () => {
           window.removeEventListener('afterprint', afterPrint)
           setInvoiceToPrint(null)
-          setStatusText(successMessage)
         }
         window.addEventListener('afterprint', afterPrint)
         window.print()
@@ -442,42 +1389,141 @@ export const WorkspaceProvider: React.FC<{
       setSelectedInvoice(detail)
     } catch (error) {
       console.error(error)
-      setStatusText('बिल तपशील पाहण्यात त्रुटी आली.')
+      notify(t('msg.invoiceLoadError'), 'error')
     }
   }
 
-  const cancelInvoice = async (invoiceId: number) => {
+  const cancelInvoice = (invoiceId: number) => {
     if (!token || currentUser?.role !== 'ADMIN') return
-    const confirmed = window.confirm('तुम्हाला हे बिल रद्द करायचे आहे का? साठा परत जोडला जाईल.')
-    if (!confirmed) return
+    requestConfirm({
+      title: t('bills.cancelBill'),
+      message: t('bills.cancelConfirm'),
+      confirmLabel: t('bills.cancelBill'),
+      cancelLabel: t('common.cancel'),
+      danger: true,
+      onConfirm: async () => {
+        try {
+          const response = await fetch(`${API_URL}/invoices/${invoiceId}/cancel`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          if (!response.ok) {
+            const errorText = await response.text()
+            throw new Error(errorText)
+          }
+          const cancelledInvoice = await response.json()
+          setSelectedInvoice(cancelledInvoice)
+          notify(t('msg.invoiceCancelled', { number: cancelledInvoice.invoice_number }), 'warning')
+          await fetchInvoices()
+          void fetchCreditBills()
+          void fetchProducts()
+          void fetchDashboardStats()
+        } catch (error) {
+          console.error(error)
+          notify(t('msg.invoiceCancelError'), 'error')
+        }
+      },
+    })
+  }
+
+  const returnInvoiceItems = async (
+    invoiceId: number,
+    items: Array<{ invoice_item_id: number; return_quantity: number }>,
+    reason?: string,
+  ): Promise<boolean> => {
+    if (!token) return false
     try {
-      const response = await fetch(`${API_URL}/invoices/${invoiceId}/cancel`, {
+      const response = await fetch(`${API_URL}/invoices/${invoiceId}/return-items`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          items,
+          reason: reason || 'Customer item return',
+        }),
       })
       if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(errorText)
+        const err = await response.json().catch(() => ({ detail: 'Failed to return items' }))
+        notify(err.detail || 'Failed to return items', 'error')
+        return false
       }
-      const cancelledInvoice = await response.json()
-      setSelectedInvoice(cancelledInvoice)
-      setInvoiceToPrint(cancelledInvoice)
-      setStatusText(`बिल रद्द झाला: ${cancelledInvoice.invoice_number}`)
+      const data = await response.json()
+      const returnInv: InvoiceDetail = data.return_invoice || data
+      setSelectedInvoice(returnInv)
+      notify(t('bills.returnSuccessBillCreated'), 'success')
+      if (data.udhari_deducted && data.udhari_deducted > 0) {
+        notify(`${t('bills.udhariDeductionNotice')} (₹${data.udhari_deducted})`, 'info')
+      }
       await fetchInvoices()
+      void fetchCreditBills()
+      void fetchProducts()
+      void fetchDashboardStats()
+      return true
     } catch (error) {
       console.error(error)
-      setStatusText('बिल रद्द करण्यात त्रुटी आली.')
+      notify('Failed to process item return', 'error')
+      return false
+    }
+  }
+
+  const settleCreditBill = async (
+    invoiceId: number,
+    amount: number,
+    paymentMode: string,
+    note?: string,
+  ): Promise<boolean> => {
+    if (!token) return false
+    try {
+      const response = await fetch(`${API_URL}/credits/${invoiceId}/settle`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          amount,
+          payment_mode: paymentMode,
+          note: note || null,
+        }),
+      })
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ detail: 'Failed to settle credit' }))
+        notify(err.detail || 'Failed to settle credit', 'error')
+        return false
+      }
+      const data = await response.json()
+      if (data?.settlement_invoice) {
+        setSelectedInvoice(data.settlement_invoice)
+      }
+      notify(
+        data?.settlement_invoice_number
+          ? t('msg.creditSettled', { number: data.settlement_invoice_number })
+          : t('bills.settleSuccess'),
+        'success',
+      )
+      await fetchCreditBills()
+      await fetchInvoices()
+      void fetchDashboardStats()
+      return true
+    } catch (error) {
+      console.error(error)
+      notify('Failed to record payment', 'error')
+      return false
     }
   }
 
   const printInvoice = (invoice: InvoiceDetail | null = selectedInvoice) => {
     if (!invoice) return
-    printInvoiceWithDialog(invoice, `प्रिंटिंग पूर्ण: ${invoice.invoice_number}`)
+    printInvoiceWithDialog(invoice, true)
   }
+
+  // ── Barcode Generation & Product Label Printing ───────────────────
 
   const generateProductBarcode = async () => {
     if (!token || currentUser?.role !== 'ADMIN') {
-      setStatusText('केवळ प्रशासक बारकोड तयार करू शकतात.')
+      notify(t('msg.adminOnlyBarcode'), 'warning')
       return
     }
     try {
@@ -492,10 +1538,10 @@ export const WorkspaceProvider: React.FC<{
       }
       const data = await response.json()
       setFormBarcode(String(data.barcode))
-      setStatusText(`बारकोड तयार झाला: ${data.barcode}`)
+      notify(t('msg.barcodeGenerated', { barcode: data.barcode }), 'success')
     } catch (error) {
       console.error(error)
-      setStatusText('बारकोड तयार करण्यात त्रुटी आली.')
+      notify(t('msg.barcodeError'), 'error')
     } finally {
       setBarcodeGenerating(false)
     }
@@ -503,7 +1549,7 @@ export const WorkspaceProvider: React.FC<{
 
   const openLabelDialog = (product: Product) => {
     if (!product.barcode) {
-      setStatusText('प्रथम उत्पादनासाठी बारकोड जोडा किंवा तयार करा.')
+      notify(t('msg.barcodeRequiredForLabel'), 'warning')
       return
     }
     setLabelDialogProduct(product)
@@ -517,10 +1563,9 @@ export const WorkspaceProvider: React.FC<{
     setInvoiceToPrint(null)
     setLabelToPrint(labelDialogProduct)
     setLabelCount(count)
-    setStatusText(`लेबल प्रिंटिंग सुरू: ${count} काप्या`)
+    notify(t('msg.labelPrintStart', { count }), 'info')
     if (typeof window.print !== 'function') {
-      console.error('window.print is not available')
-      setStatusText(`लेबल प्रिंटिंग पूर्ण: ${count} काप्या`)
+      notify(t('msg.labelPrintDone', { count }), 'success')
       return
     }
     requestAnimationFrame(() => {
@@ -528,7 +1573,7 @@ export const WorkspaceProvider: React.FC<{
         const afterLabelPrint = () => {
           window.removeEventListener('afterprint', afterLabelPrint)
           setLabelToPrint(null)
-          setStatusText(`लेबल प्रिंटिंग पूर्ण: ${count} काप्या`)
+          notify(t('msg.labelPrintDone', { count }), 'success')
         }
         window.addEventListener('afterprint', afterLabelPrint)
         window.print()
@@ -540,14 +1585,14 @@ export const WorkspaceProvider: React.FC<{
     event.preventDefault()
     if (!token) return
     if (currentUser?.role !== 'ADMIN') {
-      setStatusText('केवळ प्रशासक नवीन उत्पादने जोडू शकतात (403 Forbidden).')
+      notify(t('msg.adminOnlyProduct'), 'warning')
       return
     }
 
     let packQuantity: number | null = null
     if (formPackQtyPreset === CUSTOM_PACK_OPTION) {
       if (!isValidPackQuantity(formPackQtyCustom)) {
-        setStatusText('पॅक प्रमाण योग्य नाही. 0 पेक्षा मोठी संख्या प्रविष्ट करा.')
+        notify(t('msg.invalidPackQty'), 'error')
         return
       }
       packQuantity = Number(formPackQtyCustom.trim())
@@ -569,6 +1614,7 @@ export const WorkspaceProvider: React.FC<{
       current_stock: Number(formCurrentStock),
       low_stock_level: Number(formLowStockLevel),
     }
+
     try {
       const response = await fetch(`${API_URL}/products`, {
         method: 'POST',
@@ -584,7 +1630,8 @@ export const WorkspaceProvider: React.FC<{
       }
       const createdProduct = await response.json()
       setProducts((current) => [createdProduct, ...current])
-      setStatusText(`उत्पाद जोडला: ${createdProduct.name_mr}`)
+      const displayName = formatProductName(createdProduct.name_mr, isCurrentLangMr)
+      notify(t('msg.productCreated', { name: displayName }), 'success')
       await loadFrequentProducts()
       setFormNameMr('')
       setFormCategoryMr('')
@@ -594,40 +1641,27 @@ export const WorkspaceProvider: React.FC<{
       setFormPackQtyCustom('')
     } catch (error) {
       console.error(error)
-      setStatusText('उत्पाद तयार करण्यात त्रुटी आली.')
+      notify(t('msg.productCreateError'), 'error')
     }
   }
 
+  // Legacy Cashier Creation Form Handler
   const submitCashierForm = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (currentUser?.role !== 'ADMIN' || !token) {
-      setStatusText('केवळ प्रशासक नवीन कॅशियर तयार करू शकतात.')
+      notify(t('msg.adminOnlyProduct'), 'warning')
       return
     }
-    try {
-      const response = await fetch(`${API_URL}/admin/users`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name: cashierName.trim(),
-          username: cashierUsername.trim(),
-          password: cashierPassword,
-        }),
-      })
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(errorText)
-      }
+    const success = await createStaffMember({
+      name: cashierName.trim(),
+      username: cashierUsername.trim(),
+      password: cashierPassword,
+      role: 'CASHIER',
+    })
+    if (success) {
       setCashierName('')
       setCashierUsername('')
       setCashierPassword('')
-      setStatusText('नवीन कॅशियर तयार झाला.')
-    } catch (error) {
-      console.error(error)
-      setStatusText('कॅशियर तयार करण्यात त्रुटी आली.')
     }
   }
 
@@ -636,7 +1670,7 @@ export const WorkspaceProvider: React.FC<{
     if (!priceModalProduct || !token) return
     const priceNum = parseFloat(newSellingPrice)
     if (isNaN(priceNum) || priceNum <= 0) {
-      setPriceModalError('कृपया योग्य नवीन किंमत प्रविष्ट करा.')
+      setPriceModalError(t('msg.invalidPrice'))
       return
     }
     try {
@@ -648,7 +1682,7 @@ export const WorkspaceProvider: React.FC<{
         },
         body: JSON.stringify({
           new_price: priceNum,
-          reason: priceChangeReason.trim() || 'पुरवठादार दर बदलला',
+          reason: priceChangeReason.trim() || 'Supplier rate revised',
         }),
       })
       if (!response.ok) {
@@ -658,11 +1692,12 @@ export const WorkspaceProvider: React.FC<{
       setProducts((current) =>
         current.map((p) => (p.id === priceModalProduct.id ? { ...p, selling_price: priceNum } : p)),
       )
-      setStatusText(`किंमत अद्यतनित झाली: ${priceModalProduct.name_mr} → ₹${priceNum}`)
+      const displayName = formatProductName(priceModalProduct.name_mr, isCurrentLangMr)
+      notify(t('msg.priceUpdated', { name: displayName, price: priceNum }), 'success')
       setPriceModalProduct(null)
     } catch (error) {
       console.error(error)
-      setPriceModalError('किंमत बदलण्यात त्रुटी आली. केवळ प्रशासक किंमत बदलू शकतात.')
+      setPriceModalError(t('msg.priceUpdateError'))
     }
   }
 
@@ -674,21 +1709,75 @@ export const WorkspaceProvider: React.FC<{
   }
 
   const value: WorkspaceContextType = {
+    storeSettings,
+    paymentSettings,
+    fetchStoreSettings,
+    updateStoreSettings,
+    fetchPaymentSettings,
+    updatePaymentSettings,
+    staffList,
+    staffLoading,
+    fetchStaffList,
+    fetchNextEmployeeCode,
+    createStaffMember,
+    updateStaffMember,
+    toggleStaffStatus,
+    sendStaffResetOtp,
+    resetStaffPassword,
+    uploadStaffDocument,
+    downloadDatabaseBackup,
+    dashboardStats,
+    dashboardLoading,
+    fetchDashboardStats,
     products,
     bills,
+    filteredBills,
+    creditBills,
     frequentProducts,
     cart,
+    heldCart,
+    heldBills,
+    lastAddedItem,
     search,
     setSearch,
     filteredProducts,
     searchPreviewDevanagari,
     addToCart,
     updateCartQty,
+    updateCartDiscount,
+    clearCart,
+    holdCurrentBill,
+    recallHeldBill,
+    discardHeldBill,
     cartSubtotal,
+    taxableTotal,
+    cgstTotal,
+    sgstTotal,
     gstTotal,
     cartTotal,
+    totalMrpSavings,
+    totalQtyCount,
+    billDiscount,
+    setBillDiscount,
+    customerName,
+    setCustomerName,
+    customerPhone,
+    setCustomerPhone,
+    cashTendered,
+    setCashTendered,
+    changeReturned,
+    paymentReference,
+    setPaymentReference,
     selectedPayment,
     setSelectedPayment,
+    initialPaidAmount,
+    setInitialPaidAmount,
+    initialPaymentMode,
+    setInitialPaymentMode,
+    upiModalOpen,
+    setUpiModalOpen,
+    upiUriData,
+    openUpiPaymentModal,
     saveBill,
     invoiceSearch,
     setInvoiceSearch,
@@ -705,8 +1794,15 @@ export const WorkspaceProvider: React.FC<{
     setInvoiceToPrint,
     openInvoiceDetail,
     cancelInvoice,
+    returnInvoiceItems,
+    fetchCreditBills,
+    settleCreditBill,
     printInvoice,
     fetchInvoices,
+    exportInvoicesCsv,
+    confirmDialog,
+    requestConfirm,
+    closeConfirmDialog,
     labelToPrint,
     setLabelToPrint,
     labelCount,
@@ -765,6 +1861,9 @@ export const WorkspaceProvider: React.FC<{
     submitCashierForm,
     statusText,
     setStatusText,
+    notify,
+    toasts,
+    dismissToast,
     token,
     currentUser,
     refreshWorkspaceData,

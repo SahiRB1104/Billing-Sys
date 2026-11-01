@@ -1,3 +1,5 @@
+import { toStrictEnglish, toStrictMarathi } from '../utils/transliteration'
+
 export const UNIT_TYPES = [
   'ग्रॅम',
   'किलो',
@@ -11,6 +13,18 @@ export const UNIT_TYPES = [
 ] as const
 
 export type UnitType = (typeof UNIT_TYPES)[number]
+
+export const UNIT_LABELS_EN: Record<string, string> = {
+  ग्रॅम: 'Gram (g)',
+  किलो: 'Kilogram (kg)',
+  मिली: 'Millilitre (ml)',
+  लिटर: 'Litre (Ltr)',
+  नग: 'Piece (pcs)',
+  डझन: 'Dozen (doz)',
+  पॅकेट: 'Packet (pkt)',
+  बॉक्स: 'Box',
+  बाटली: 'Bottle (btl)',
+}
 
 export const PACK_QUANTITY_OPTIONS: Record<string, string[]> = {
   ग्रॅम: ['50', '100', '200', '250', '500', '750', '1000'],
@@ -46,6 +60,55 @@ export const PRODUCT_CATEGORIES = [
   'वैयक्तिक वापर',
   'इतर',
 ]
+
+export const CATEGORY_LABELS_EN: Record<string, string> = {
+  धान्य: 'Grains & Cereals',
+  डाळी: 'Pulses & Lentils',
+  तेल: 'Edible Oil',
+  मसाला: 'Spices & Masala',
+  साखर: 'Sugar & Jaggery',
+  मीठ: 'Salt',
+  'चहा / कॉफी': 'Tea & Coffee',
+  बिस्किटे: 'Biscuits & Bakery',
+  स्नॅक्स: 'Snacks & Namkeen',
+  पेये: 'Beverages & Cold Drinks',
+  'दुग्धजन्य पदार्थ': 'Dairy Products',
+  भाज्या: 'Vegetables',
+  फळे: 'Fruits',
+  साबण: 'Bath & Laundry Soap',
+  डिटर्जंट: 'Detergent & Cleaners',
+  'घरगुती वस्तू': 'Household Essentials',
+  'वैयक्तिक वापर': 'Personal Care',
+  इतर: 'Other Grocery',
+  'daily items': 'Daily Essentials',
+}
+
+export function formatCategoryDisplay(category: string | null | undefined, isMarathi: boolean): string {
+  if (!category) return ''
+  const trimmed = category.trim()
+  if (isMarathi) {
+    return toStrictMarathi(trimmed)
+  }
+  return CATEGORY_LABELS_EN[trimmed] || toStrictEnglish(trimmed)
+}
+
+export function formatUnitDisplay(unitDisplay: string | null | undefined, isMarathi: boolean): string {
+  if (!unitDisplay) return ''
+  const trimmed = unitDisplay.trim()
+  if (isMarathi) {
+    return toStrictMarathi(trimmed)
+  }
+  return toStrictEnglish(trimmed)
+}
+
+export function formatProductName(nameMr: string | null | undefined, isMarathi: boolean): string {
+  if (!nameMr) return ''
+  const trimmed = nameMr.trim()
+  if (isMarathi) {
+    return trimmed
+  }
+  return toStrictEnglish(trimmed)
+}
 
 export const RECENT_PRODUCT_DAYS = 7
 

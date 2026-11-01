@@ -1,5 +1,6 @@
 import React from 'react'
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { LoginPage } from './pages/LoginPage'
 import { LandingPage } from './pages/LandingPage'
 import { AppShell } from './components/AppShell'
@@ -17,10 +18,11 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 const RequireAuth: React.FC = () => {
   const { currentUser, loading } = useAuth()
+  const { t } = useTranslation()
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f3efe8]">
-        <div className="text-stone-700">लोड होत आहे...</div>
+      <div className="flex h-dvh w-full items-center justify-center overflow-hidden bg-slate-900">
+        <div className="text-sm font-bold text-white">{t('status.loading')}</div>
       </div>
     )
   }
@@ -35,6 +37,7 @@ function App() {
         <Route element={<AppShell />}>
           <Route index element={<LandingPage />} />
           <Route path="landing" element={<Navigate to="/" replace />} />
+          <Route path="dashboard" element={<LandingPage />} />
           <Route path="billing" element={<BillingModule />} />
           <Route path="products" element={<AdminRoute><ProductsModule /></AdminRoute>} />
           <Route path="bills" element={<BillsModule />} />

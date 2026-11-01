@@ -162,6 +162,7 @@ def test_admin_can_cancel_invoice_and_restore_stock():
     assert prod_after['current_stock'] == 15
 
     # Verify RETURN stock movement was created in DB
+    cancel_invoice_num = cancelled_data['invoice_number']
     db = SessionLocal()
     try:
         return_mv = (
@@ -169,7 +170,7 @@ def test_admin_can_cancel_invoice_and_restore_stock():
             .filter(
                 StockMovement.product_id == product_id,
                 StockMovement.type == StockMovementType.RETURN,
-                StockMovement.reference_id == invoice_number,
+                StockMovement.reference_id == cancel_invoice_num,
             )
             .first()
         )

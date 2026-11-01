@@ -1,18 +1,36 @@
-import React from 'react'
+import React, { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { TransliteratedInput } from './TransliteratedInput'
+import { PredictiveSearchInput, type PredictiveSuggestion } from './PredictiveSearchInput'
 import {
   CUSTOM_PACK_OPTION,
   PACK_QUANTITY_OPTIONS,
   PRODUCT_CATEGORIES,
   UNIT_TYPES,
+  UNIT_LABELS_EN,
+  formatCategoryDisplay,
+  formatProductName,
+  formatUnitDisplay,
   isCustomPackOption,
   isProductRecent,
 } from '../constants/productOptions'
+import {
+  searchMatchesProduct,
+  devanagariToEnglishApprox,
+} from '../utils/transliteration'
+import {
+  LuBarcode,
+  LuPrinter,
+  LuIndianRupee,
+  LuPlus,
+} from './Icons'
 
 export const ProductsModule: React.FC = () => {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const isMarathi = (i18n.language || 'mr').startsWith('mr')
+  const [catalogFilter, setCatalogFilter] = useState('')
+
   const ws = useWorkspace()
   const {
     products,
@@ -20,14 +38,13 @@ export const ProductsModule: React.FC = () => {
     generateProductBarcode,
     openPriceModal,
     openLabelDialog,
-    setStatusText,
+    notify,
     setFormBarcode,
     setFormNameMr,
     setFormCategoryMr,
     setFormUnitType,
     setFormPackQtyPreset,
     setFormPackQtyCustom,
-    setFormSku: _setFormSku,
     setFormPurchasePrice,
     setFormSellingPrice,
     setFormMrp,
@@ -50,9 +67,30 @@ export const ProductsModule: React.FC = () => {
     createProduct,
   } = ws
 
+  const filteredCatalog = useMemo(() => {
+    const q = catalogFilter.trim()
+    if (!q) return products
+    return products.filter((p) => searchMatchesProduct(p, q))
+  }, [products, catalogFilter])
+
+  const catalogSuggestions: PredictiveSuggestion[] = useMemo(() => {
+    return products.map((p) => {
+      const displayName = formatProductName(p.name_mr, isMarathi)
+      const englishApprox = devanagariToEnglishApprox(p.name_mr)
+      return {
+        id: p.id,
+        primaryText: displayName,
+        secondaryText: `${p.barcode || 'No Barcode'} • ${formatCategoryDisplay(p.category_mr, isMarathi) || ''}`,
+        badgeText: `₹ ${Number(p.selling_price ?? 0).toFixed(2)}`,
+        keywords: [p.name_mr, englishApprox, p.barcode || '', p.category_mr || ''],
+        onSelect: () => setCatalogFilter(displayName),
+      }
+    })
+  }, [products, isMarathi])
+
   const openLabelDialogFromForm = () => {
     if (!formBarcode.trim()) {
-      setStatusText('प्रथम बारकोड तयार करा किंवा मॅन्युअली भरा.')
+      notify(t('msg.barcodeRequiredForLabel'), 'warning')
       return
     }
     const packQuantity = isCustomPackOption(formPackQtyPreset)
@@ -60,14 +98,16 @@ export const ProductsModule: React.FC = () => {
       : Number(formPackQtyPreset) || null
     openLabelDialog({
       id: 0,
-      name_mr: formNameMr.trim() || 'उत्पादन',
+      name_mr: formNameMr.trim() || (isMarathi ? 'उत्पादन' : 'Product'),
       barcode: formBarcode.trim(),
       sku: formSku.trim() || null,
       category_mr: formCategoryMr.trim() || null,
       unit: null,
       unit_type: formUnitType.trim() || null,
       pack_quantity: packQuantity,
-      unit_display: packQuantity ? `${packQuantity} ${formUnitType}`.trim() : formUnitType.trim() || null,
+      unit_display: packQuantity
+        ? `${packQuantity} ${formUnitType}`.trim()
+        : formUnitType.trim() || null,
       purchase_price: Number(formPurchasePrice) || null,
       selling_price: Number(formSellingPrice) || null,
       mrp: Number(formMrp) || null,
@@ -80,286 +120,382 @@ export const ProductsModule: React.FC = () => {
   }
 
   return (
-    <div className="grid flex-1 grid-cols-1 gap-5 xl:grid-cols-[1.16fr_0.84fr]">
-      <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-        <div className="mb-4 flex items-center justify-between gap-3">
+    <div className="grid h-full min-h-0 flex-1 grid-cols-1 gap-2.5 overflow-hidden lg:grid-cols-12">
+      {/* ── LEFT PANE (7 cols): Bounded Product Catalog Table ──────── */}
+      <section className="flex min-h-0 flex-col gap-2 overflow-hidden rounded-md border border-[#ECB390] bg-[#FCF8E8] p-3.5 lg:col-span-7">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[#ECB390] pb-2">
           <div>
-            <div className="text-xs font-bold text-stone-500">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[#7A6258]">
               {t('nav.productEntry')}
             </div>
-            <h2 className="mt-1 text-2xl font-black text-stone-900">{t('products.list')}</h2>
+            <h2 className="text-sm font-bold uppercase tracking-wide text-[#3D251E]">
+              {t('products.list')}{' '}
+              <span className="ml-1 rounded bg-[#ECDFC8] px-2 py-0.5 text-xs font-bold text-[#3D251E] font-english">
+                {filteredCatalog.length}
+              </span>
+            </h2>
           </div>
-          <button
-            type="button"
-            onClick={generateProductBarcode}
-            disabled={barcodeGenerating}
-            className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {barcodeGenerating ? 'तयार करत आहे...' : 'बारकोड तयार करा'}
-          </button>
+
+          <div className="flex items-center gap-2">
+            <PredictiveSearchInput
+              value={catalogFilter}
+              onChange={setCatalogFilter}
+              suggestions={catalogSuggestions}
+              placeholder={t('products.searchCatalogPlaceholder')}
+              className="w-60"
+            />
+            <button
+              type="button"
+              onClick={generateProductBarcode}
+              disabled={barcodeGenerating}
+              className="inline-flex items-center gap-1.5 rounded border border-[#ECB390] bg-[#ECDFC8] px-3 py-1.5 text-xs font-bold text-[#3D251E] hover:bg-[#ECB390] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <LuBarcode className="h-3.5 w-3.5 text-[#DF7861]" />
+              <span>
+                {barcodeGenerating
+                  ? t('products.generating')
+                  : t('products.generateBarcode')}
+              </span>
+            </button>
+          </div>
         </div>
 
-        <div className="max-h-[640px] overflow-auto rounded-2xl border border-stone-200">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-stone-50 text-stone-700">
+        <div
+          tabIndex={0}
+          role="region"
+          aria-label={t('products.list')}
+          className="pos-scroll min-h-0 flex-1 rounded-md border border-[#ECB390] bg-[#FCF8E8]"
+        >
+          <table className="pos-table text-left text-xs">
+            <thead className="bg-[#ECB390] text-[11px] font-bold text-[#3D251E]">
               <tr>
-                <th className="px-4 py-3 font-bold">{t('products.productName')}</th>
-                <th className="whitespace-nowrap px-4 py-3 font-bold">{t('products.barcode')}</th>
-                <th className="whitespace-nowrap px-4 py-3 font-bold">{t('cart.stock')}</th>
-                <th className="whitespace-nowrap px-4 py-3 font-bold">{t('products.sellingPrice')}</th>
-                <th className="whitespace-nowrap px-4 py-3 font-bold">{t('products.actions')}</th>
+                <th className="px-3 py-2.5">{t('products.productName')}</th>
+                <th className="whitespace-nowrap px-3 py-2.5">
+                  {t('products.barcode')}
+                </th>
+                <th className="whitespace-nowrap px-3 py-2.5 text-right">
+                  {t('cart.stock')}
+                </th>
+                <th className="whitespace-nowrap px-3 py-2.5 text-right">
+                  {t('products.sellingPrice')}
+                </th>
+                <th className="whitespace-nowrap px-3 py-2.5 text-right">
+                  {t('products.actions')}
+                </th>
               </tr>
             </thead>
-            <tbody>
-              {products.map((product) => (
-                <tr key={product.id} className="border-t border-stone-200 hover:bg-stone-50">
-                  <td className="px-4 py-3 align-middle">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-semibold text-stone-900">{product.name_mr}</span>
-                      {isProductRecent(product.created_at) ? (
-                        <span className="rounded bg-emerald-100 px-1.5 py-[1px] text-[9px] font-semibold text-emerald-700">
-                          नुकतेच जोडले
+            <tbody className="divide-y divide-[#ECDFC8] bg-[#FCF8E8]">
+              {filteredCatalog.map((product) => {
+                const displayName = formatProductName(product.name_mr, isMarathi)
+                const displayUnit = formatUnitDisplay(
+                  product.unit_display,
+                  isMarathi,
+                )
+                const displayCat = formatCategoryDisplay(
+                  product.category_mr,
+                  isMarathi,
+                )
+
+                return (
+                  <tr key={product.id} className="hover:bg-[#ECDFC8]/60">
+                    <td className="px-3 py-2 align-middle">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-bold text-[#3D251E]">
+                          {displayName}
                         </span>
-                      ) : null}
-                    </div>
-                    <div className="mt-0.5 text-xs text-stone-500">
-                      {product.unit_display ? (
-                        <span className="font-semibold text-stone-600">{product.unit_display}</span>
-                      ) : null}
-                      {product.unit_display && product.category_mr ? (
-                        <span className="mx-1 text-stone-300">·</span>
-                      ) : null}
-                      {product.category_mr || ''}
-                    </div>
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 align-middle text-sm text-stone-700">{product.barcode || '—'}</td>
-                  <td className="whitespace-nowrap px-4 py-3 align-middle font-semibold">{product.current_stock}</td>
-                  <td className="whitespace-nowrap px-4 py-3 align-middle font-semibold">
-                    ₹ {Number(product.selling_price ?? 0).toFixed(2)}
-                    {product.mrp !== null && product.mrp !== undefined ? (
-                      <span className="ml-1 text-[10px] font-bold text-stone-400">
-                        MRP ₹ {Number(product.mrp).toFixed(2)}
+                        {isProductRecent(product.created_at) ? (
+                          <span className="rounded border border-emerald-300 bg-emerald-50 px-1.5 py-[1px] text-[9px] font-bold text-emerald-800">
+                            {t('products.recentlyAdded')}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-[#7A6258]">
+                        {displayUnit ? (
+                          <span className="font-semibold text-[#5C4338]">
+                            {displayUnit}
+                          </span>
+                        ) : null}
+                        {displayUnit && displayCat ? (
+                          <span className="mx-1 text-[#ECB390]">·</span>
+                        ) : null}
+                        {displayCat ? <span>{displayCat}</span> : null}
+                      </div>
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 align-middle text-xs font-mono font-semibold text-[#5C4338] font-english">
+                      {product.barcode || '—'}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right align-middle font-bold font-english">
+                      <span
+                        className={
+                          product.current_stock <= product.low_stock_level
+                            ? 'text-[#B93829]'
+                            : 'text-[#3D251E]'
+                        }
+                      >
+                        {product.current_stock}
                       </span>
-                    ) : null}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 align-middle">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => openPriceModal(product)}
-                        className="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-bold text-stone-700 hover:bg-stone-100"
-                      >
-                        ₹ {t('products.updatePrice')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openLabelDialog(product)}
-                        className="rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-stone-800"
-                      >
-                        प्रिंट बारकोड लेबल
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right align-middle font-black text-[#3D251E] font-english">
+                      ₹{Number(product.selling_price ?? 0).toFixed(2)}
+                      {product.mrp !== null && product.mrp !== undefined ? (
+                        <div className="text-[10px] font-semibold text-[#7A6258]">
+                          MRP ₹{Number(product.mrp).toFixed(2)}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right align-middle">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => openPriceModal(product)}
+                          className="inline-flex items-center gap-1 rounded border border-[#ECB390] bg-[#ECDFC8] px-2.5 py-1 text-[11px] font-bold text-[#3D251E] hover:bg-[#ECB390]"
+                        >
+                          <LuIndianRupee className="h-3 w-3 text-[#DF7861]" />
+                          <span>{t('products.updatePrice')}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openLabelDialog(product)}
+                          className="inline-flex items-center gap-1 rounded bg-[#DF7861] px-2.5 py-1 text-[11px] font-bold text-[#FCF8E8] hover:bg-[#c9624c]"
+                        >
+                          <LuPrinter className="h-3 w-3" />
+                          <span>{t('products.printBarcodeLabel')}</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
       </section>
 
-      <form onSubmit={createProduct} className="rounded-2xl border border-stone-200 bg-stone-50 p-5 shadow-sm">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
-            <div className="text-xs font-bold text-stone-500">
-              {t('products.newProduct')}
+      {/* ── RIGHT PANE (5 cols): Compact New Product Form (Fits 100% in View) ── */}
+      <form
+        onSubmit={createProduct}
+        className="flex min-h-0 flex-col justify-between overflow-hidden rounded-md border border-[#ECB390] bg-[#FCF8E8] p-3.5 lg:col-span-5"
+      >
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between gap-2 border-b border-[#ECB390] pb-2">
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-[#7A6258]">
+                {t('products.newProduct')}
+              </div>
+              <h2 className="text-sm font-bold uppercase tracking-wide text-[#3D251E]">
+                {t('products.newProduct')}
+              </h2>
             </div>
-            <h2 className="mt-1 text-2xl font-black text-stone-900">नवीन उत्पादन</h2>
-          </div>
-          <span className="rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-bold text-stone-700">
-            प्रशासक
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="md:col-span-2">
-            <TransliteratedInput
-              label={t('products.productName')}
-              value={formNameMr}
-              onChangeValue={setFormNameMr}
-              placeholder="उदा. साखर (sakhar)"
-              required
-              className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-sm"
-            />
+            <span className="rounded border border-[#ECB390] bg-[#ECDFC8] px-2.5 py-0.5 text-[11px] font-bold text-[#3D251E]">
+              {t('products.adminOnly')}
+            </span>
           </div>
 
-          <label className="space-y-1 text-sm font-semibold text-stone-700 md:col-span-2">
-            <span>{t('products.barcode')}</span>
-            <input
-              value={formBarcode}
-              onChange={(e) => setFormBarcode(e.target.value)}
-              placeholder="8901234567890"
-              className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-sm"
-            />
-          </label>
-
-          <label className="space-y-1 text-sm font-semibold text-stone-700">
-            <span>{t('products.category')}</span>
-            <select
-              value={formCategoryMr}
-              onChange={(e) => setFormCategoryMr(e.target.value)}
-              className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-sm"
-            >
-              <option value="">— वर्ग निवडा —</option>
-              {PRODUCT_CATEGORIES.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="space-y-1 text-sm font-semibold text-stone-700">
-            <span>{t('products.unit')}</span>
-            <select
-              value={formUnitType}
-              onChange={(e) => {
-                const nextUnit = e.target.value
-                setFormUnitType(nextUnit)
-                setFormPackQtyPreset(PACK_QUANTITY_OPTIONS[nextUnit]?.[0] ?? '1')
-                setFormPackQtyCustom('')
-              }}
-              className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-sm"
-            >
-              {UNIT_TYPES.map((unitType) => (
-                <option key={unitType} value={unitType}>
-                  {unitType}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="space-y-1 text-sm font-semibold text-stone-700">
-            <span>पॅक प्रमाण</span>
-            {formPackQtyPreset === CUSTOM_PACK_OPTION ? (
-              <input
-                type="number"
-                min={0.01}
-                step="0.01"
-                inputMode="decimal"
-                value={formPackQtyCustom}
-                onChange={(e) => setFormPackQtyCustom(e.target.value)}
-                placeholder="उदा. 0.75, 3, 5"
-                className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-sm"
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <TransliteratedInput
+                label={t('products.productName')}
+                value={formNameMr}
+                onChangeValue={setFormNameMr}
+                placeholder={t('products.productNamePlaceholder')}
+                required
+                showLiveBadge={false}
+                className="w-full rounded border border-[#ECB390] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861]"
               />
-            ) : (
+            </div>
+
+            <label className="space-y-1 text-xs font-bold text-[#3D251E] sm:col-span-2">
+              <span>{t('products.barcode')}</span>
+              <div className="flex gap-1.5">
+                <input
+                  value={formBarcode}
+                  onChange={(e) => setFormBarcode(e.target.value)}
+                  placeholder="8901234567890"
+                  className="flex-1 rounded border border-[#ECB390] bg-white px-2.5 py-1.5 text-xs font-mono font-semibold text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+                />
+                <button
+                  type="button"
+                  onClick={generateProductBarcode}
+                  disabled={barcodeGenerating}
+                  className="inline-flex shrink-0 items-center gap-1 rounded border border-[#ECB390] bg-[#ECDFC8] px-2.5 py-1 text-xs font-bold text-[#3D251E] hover:bg-[#ECB390]"
+                >
+                  <LuBarcode className="h-3.5 w-3.5 text-[#DF7861]" />
+                  <span>{t('products.generateBarcode')}</span>
+                </button>
+              </div>
+            </label>
+
+            <label className="space-y-1 text-xs font-bold text-[#3D251E]">
+              <span>{t('products.category')}</span>
               <select
-                value={formPackQtyPreset}
-                onChange={(e) => setFormPackQtyPreset(e.target.value)}
-                className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-sm"
+                value={formCategoryMr}
+                onChange={(e) => setFormCategoryMr(e.target.value)}
+                className="w-full rounded border border-[#ECB390] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861]"
               >
-                {(PACK_QUANTITY_OPTIONS[formUnitType] ?? []).map((quantity) => (
-                  <option key={quantity} value={quantity}>
-                    {quantity}
+                <option value="">{t('products.selectCategory')}</option>
+                {PRODUCT_CATEGORIES.map((category) => (
+                  <option key={category} value={category}>
+                    {formatCategoryDisplay(category, isMarathi)}
                   </option>
                 ))}
-                <option value={CUSTOM_PACK_OPTION}>{CUSTOM_PACK_OPTION}</option>
               </select>
-            )}
-          </label>
+            </label>
 
-          <label className="space-y-1 text-sm font-semibold text-stone-700">
-            <span>{t('products.gst')} (%)</span>
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              inputMode="decimal"
-              value={formGstRate}
-              onChange={(e) => setFormGstRate(Number(e.target.value))}
-              className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-sm"
-            />
-          </label>
+            <label className="space-y-1 text-xs font-bold text-[#3D251E]">
+              <span>{t('products.unit')}</span>
+              <select
+                value={formUnitType}
+                onChange={(e) => {
+                  const nextUnit = e.target.value
+                  setFormUnitType(nextUnit)
+                  setFormPackQtyPreset(
+                    PACK_QUANTITY_OPTIONS[nextUnit]?.[0] ?? '1',
+                  )
+                  setFormPackQtyCustom('')
+                }}
+                className="w-full rounded border border-[#ECB390] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861]"
+              >
+                {UNIT_TYPES.map((unitType) => (
+                  <option key={unitType} value={unitType}>
+                    {isMarathi ? unitType : UNIT_LABELS_EN[unitType] || unitType}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <label className="space-y-1 text-sm font-semibold text-stone-700">
-            <span>{t('products.purchasePrice')} (₹)</span>
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              inputMode="decimal"
-              value={formPurchasePrice}
-              onChange={(e) => setFormPurchasePrice(Number(e.target.value))}
-              className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-sm"
-            />
-          </label>
+            <label className="space-y-1 text-xs font-bold text-[#3D251E]">
+              <span>{t('products.packQty')}</span>
+              {formPackQtyPreset === CUSTOM_PACK_OPTION ? (
+                <input
+                  type="number"
+                  min={0.01}
+                  step="0.01"
+                  inputMode="decimal"
+                  value={formPackQtyCustom}
+                  onChange={(e) => setFormPackQtyCustom(e.target.value)}
+                  placeholder={t('products.packQtyCustomPlaceholder')}
+                  className="w-full rounded border border-[#ECB390] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+                />
+              ) : (
+                <select
+                  value={formPackQtyPreset}
+                  onChange={(e) => setFormPackQtyPreset(e.target.value)}
+                  className="w-full rounded border border-[#ECB390] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+                >
+                  {(PACK_QUANTITY_OPTIONS[formUnitType] ?? []).map((quantity) => (
+                    <option key={quantity} value={quantity}>
+                      {quantity}
+                    </option>
+                  ))}
+                  <option value={CUSTOM_PACK_OPTION}>
+                    {t('products.customOption')}
+                  </option>
+                </select>
+              )}
+            </label>
 
-          <label className="space-y-1 text-sm font-semibold text-stone-700">
-            <span>{t('products.sellingPrice')} (₹)</span>
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              inputMode="decimal"
-              value={formSellingPrice}
-              onChange={(e) => setFormSellingPrice(Number(e.target.value))}
-              className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-sm"
-              required
-            />
-          </label>
+            <label className="space-y-1 text-xs font-bold text-[#3D251E]">
+              <span>{t('products.gst')} (%)</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                inputMode="decimal"
+                value={formGstRate}
+                onChange={(e) => setFormGstRate(Number(e.target.value))}
+                className="w-full rounded border border-[#ECB390] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+              />
+            </label>
 
-          <label className="space-y-1 text-sm font-semibold text-stone-700">
-            <span>{t('products.mrp')} (₹)</span>
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              inputMode="decimal"
-              value={formMrp}
-              onChange={(e) => setFormMrp(Number(e.target.value))}
-              className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-sm"
-            />
-          </label>
+            <label className="space-y-1 text-xs font-bold text-[#3D251E]">
+              <span>{t('products.purchasePrice')} (₹)</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                inputMode="decimal"
+                value={formPurchasePrice}
+                onChange={(e) => setFormPurchasePrice(Number(e.target.value))}
+                className="w-full rounded border border-[#ECB390] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+              />
+            </label>
 
-          <label className="space-y-1 text-sm font-semibold text-stone-700">
-            <span>{t('products.openingStock')}</span>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              inputMode="numeric"
-              value={formCurrentStock}
-              onChange={(e) => setFormCurrentStock(Number(e.target.value))}
-              className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-sm"
-            />
-          </label>
+            <label className="space-y-1 text-xs font-bold text-[#3D251E]">
+              <span>{t('products.sellingPrice')} (₹) *</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                inputMode="decimal"
+                value={formSellingPrice}
+                onChange={(e) => setFormSellingPrice(Number(e.target.value))}
+                className="w-full rounded border border-[#ECB390] bg-white px-2.5 py-1.5 text-xs font-black text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+                required
+              />
+            </label>
 
-          <label className="space-y-1 text-sm font-semibold text-stone-700">
-            <span>{t('products.minimumStock')}</span>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              inputMode="numeric"
-              value={formLowStockLevel}
-              onChange={(e) => setFormLowStockLevel(Number(e.target.value))}
-              className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-sm"
-            />
-          </label>
+            <label className="space-y-1 text-xs font-bold text-[#3D251E]">
+              <span>{t('products.mrp')} (₹)</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                inputMode="decimal"
+                value={formMrp}
+                onChange={(e) => setFormMrp(Number(e.target.value))}
+                className="w-full rounded border border-[#ECB390] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+              />
+            </label>
+
+            <div className="grid grid-cols-2 gap-2">
+              <label className="space-y-1 text-xs font-bold text-[#3D251E]">
+                <span className="block truncate">
+                  {t('products.openingStock')}
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  inputMode="numeric"
+                  value={formCurrentStock}
+                  onChange={(e) => setFormCurrentStock(Number(e.target.value))}
+                  className="w-full rounded border border-[#ECB390] bg-white px-2 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+                />
+              </label>
+
+              <label className="space-y-1 text-xs font-bold text-[#3D251E]">
+                <span className="block truncate">
+                  {t('products.minimumStock')}
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  inputMode="numeric"
+                  value={formLowStockLevel}
+                  onChange={(e) => setFormLowStockLevel(Number(e.target.value))}
+                  className="w-full rounded border border-[#ECB390] bg-white px-2 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+                />
+              </label>
+            </div>
+          </div>
         </div>
 
-        <div className="mt-5 flex flex-wrap gap-3">
+        <div className="mt-3 flex shrink-0 items-center justify-end gap-2 border-t border-[#ECB390] pt-2.5">
           <button
             type="button"
             onClick={openLabelDialogFromForm}
-            className="rounded-xl border border-stone-300 bg-white px-4 py-2.5 text-sm font-bold text-stone-700 hover:bg-stone-100"
+            className="inline-flex items-center gap-1.5 rounded border border-[#ECB390] bg-[#ECDFC8] px-3.5 py-2 text-xs font-bold text-[#3D251E] hover:bg-[#ECB390]"
           >
-            प्रिंट बारकोड लेबल
+            <LuPrinter className="h-3.5 w-3.5 text-[#DF7861]" />
+            <span>{t('products.printBarcodeLabel')}</span>
           </button>
           <button
             type="submit"
-            className="rounded-xl bg-stone-900 px-5 py-2.5 text-sm font-bold text-white hover:bg-stone-800"
+            className="inline-flex items-center gap-1.5 rounded bg-[#DF7861] px-5 py-2 text-xs font-bold text-[#FCF8E8] hover:bg-[#c9624c]"
           >
-            {t('products.createButton')}
+            <LuPlus className="h-4 w-4" />
+            <span>{t('products.createButton')}</span>
           </button>
         </div>
       </form>

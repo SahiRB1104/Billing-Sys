@@ -2,18 +2,34 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Mukta font (WOFF2, offline-bundled) ─────────────────────── */
+/* ── Main Marathi Font: Tiro Devanagari Marathi (Offline Bundled) ─────── */
 
-/* Weight 400 – Regular */
 @font-face {
-  font-family: 'Mukta';
+  font-family: 'Tiro Devanagari Marathi';
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url('./assets/fonts/Mukta-Regular-devanagari.woff2') format('woff2');
-  unicode-range: U+0900-097F, U+1CD0-1CF9, U+200C-200D, U+20A8, U+20B9,
-    U+20F0, U+25CC, U+A830-A839, U+A8E0-A8FF, U+11B00-11B09;
+  src: url('../Tiro_Devanagari_Marathi/TiroDevanagariMarathi-Regular.ttf') format('truetype');
 }
+
+@font-face {
+  font-family: 'Tiro Devanagari Marathi';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../Tiro_Devanagari_Marathi/TiroDevanagariMarathi-Italic.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Tiro Devanagari Marathi';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../Tiro_Devanagari_Marathi/TiroDevanagariMarathi-Regular.ttf') format('truetype');
+}
+
+/* ── English / Numeric Font: Mukta Latin (Offline Bundled) ────────────── */
+
 @font-face {
   font-family: 'Mukta';
   font-style: normal;
@@ -21,20 +37,10 @@
   font-display: swap;
   src: url('./assets/fonts/Mukta-Regular-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
-    U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+    U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+20B9, U+2122,
     U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-/* Weight 500 – Medium */
-@font-face {
-  font-family: 'Mukta';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('./assets/fonts/Mukta-Medium-devanagari.woff2') format('woff2');
-  unicode-range: U+0900-097F, U+1CD0-1CF9, U+200C-200D, U+20A8, U+20B9,
-    U+20F0, U+25CC, U+A830-A839, U+A8E0-A8FF, U+11B00-11B09;
-}
 @font-face {
   font-family: 'Mukta';
   font-style: normal;
@@ -42,20 +48,10 @@
   font-display: swap;
   src: url('./assets/fonts/Mukta-Medium-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
-    U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+    U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+20B9, U+2122,
     U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-/* Weight 600 – SemiBold */
-@font-face {
-  font-family: 'Mukta';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url('./assets/fonts/Mukta-SemiBold-devanagari.woff2') format('woff2');
-  unicode-range: U+0900-097F, U+1CD0-1CF9, U+200C-200D, U+20A8, U+20B9,
-    U+20F0, U+25CC, U+A830-A839, U+A8E0-A8FF, U+11B00-11B09;
-}
 @font-face {
   font-family: 'Mukta';
   font-style: normal;
@@ -63,20 +59,10 @@
   font-display: swap;
   src: url('./assets/fonts/Mukta-SemiBold-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
-    U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+    U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+20B9, U+2122,
     U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-/* Weight 700 – Bold */
-@font-face {
-  font-family: 'Mukta';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url('./assets/fonts/Mukta-Bold-devanagari.woff2') format('woff2');
-  unicode-range: U+0900-097F, U+1CD0-1CF9, U+200C-200D, U+20A8, U+20B9,
-    U+20F0, U+25CC, U+A830-A839, U+A8E0-A8FF, U+11B00-11B09;
-}
 @font-face {
   font-family: 'Mukta';
   font-style: normal;
@@ -84,139 +70,209 @@
   font-display: swap;
   src: url('./assets/fonts/Mukta-Bold-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
-    U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+    U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+20B9, U+2122,
     U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-/* ── Root & base typography ──────────────────────────────────── */
+/* ── Root & Viewport Lock (One-View Screen POS Software UI) ─────────── */
 
 :root {
-  /* 25% UI zoom: 16px → 20px base */
-  font-size: 20px;
-  font-family: 'Mukta', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
-    Roboto, 'Helvetica Neue', Arial, sans-serif;
-  line-height: 1.5;
+  font-size: 14px;
+  font-family: 'Mukta', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+  line-height: 1.4;
   font-weight: 400;
-  color: #1c1917;
-  background: #f4f1ea;
-  font-synthesis: none;
+  color: #3D251E;
+  background: #ECDFC8;
+  --pos-bg-main: #ECDFC8;      /* Warm Almond Beige */
+  --pos-bg-panel: #FCF8E8;     /* Soft Warm Cream */
+  --pos-border-muted: #ECB390; /* Warm Peach / Apricot */
+  --pos-accent-deep: #DF7861;  /* Terracotta Coral */
+  --pos-surface-light: #FCF8E8;
+  --pos-ink-dark: #3D251E;
+  font-synthesis: style weight;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-html {
-  scroll-behavior: smooth;
+* {
+  box-sizing: border-box;
 }
 
-body {
+html,
+body,
+#root {
   margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
-  background: #f4f1ea;
-  font-family: 'Mukta', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
-    Roboto, 'Helvetica Neue', Arial, sans-serif;
-  font-weight: 400;
+  padding: 0;
+  width: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  background: #ECDFC8;
+  color: #3D251E;
+  user-select: none;
 }
 
-/* ── Typography scale (font-weight rules) ────────────────────── */
-
-/* Headings – Mukta 600/700 */
-h1, h2, h3, h4, h5, h6 {
-  font-family: 'Mukta', system-ui, sans-serif;
-  font-weight: 600;
-  line-height: 1.3;
+input,
+textarea,
+select,
+td,
+th,
+.selectable-text {
+  user-select: text;
 }
 
-h1 {
-  font-weight: 700;
+/* ── Strict Language Font Enforcement ───────────────────────────────── */
+
+html[lang='mr'],
+html[lang='mr'] body {
+  font-family: 'Tiro Devanagari Marathi', 'Mukta', 'Segoe UI', system-ui, serif;
 }
 
-/* Normal body text – Mukta 400 */
-p, span, li, td, th, div {
-  font-family: 'Mukta', system-ui, sans-serif;
+html[lang='en'],
+html[lang='en'] body {
+  font-family: 'Mukta', 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
 
-/* Labels / secondary text – Mukta 500 */
-label,
-.badge,
-.caption,
-.text-sm,
-.text-xs,
-small {
-  font-weight: 500;
+.font-marathi,
+.font-ams,
+.font-shikha,
+.font-calligraphy,
+.font-ams-display,
+.devanagari {
+  font-family: 'Tiro Devanagari Marathi', 'Mukta', serif !important;
 }
 
-/* Buttons – Mukta 600 */
-button,
-.btn,
-[role="button"] {
-  font-family: 'Mukta', system-ui, sans-serif;
-  font-weight: 600;
+.font-english,
+.english {
+  font-family: 'Mukta', 'Segoe UI', system-ui, -apple-system, sans-serif !important;
+  font-variant-numeric: tabular-nums;
 }
 
-/* Form elements inherit properly */
+/* When English toggle is active, strictly use English sans-serif font everywhere */
+html[lang='en'] .font-ams,
+html[lang='en'] .font-marathi,
+html[lang='en'] .font-shikha,
+html[lang='en'] .font-calligraphy,
+html[lang='en'] .font-ams-display,
+html[lang='en'] h1,
+html[lang='en'] h2,
+html[lang='en'] h3,
+html[lang='en'] h4,
+html[lang='en'] h5,
+html[lang='en'] h6,
+html[lang='en'] p,
+html[lang='en'] span,
+html[lang='en'] div,
+html[lang='en'] button,
+html[lang='en'] td,
+html[lang='en'] th {
+  font-family: 'Mukta', 'Segoe UI', system-ui, -apple-system, sans-serif !important;
+}
+
+/* When Marathi toggle is active, use Tiro Devanagari Marathi */
+html[lang='mr'] h1,
+html[lang='mr'] h2,
+html[lang='mr'] h3,
+html[lang='mr'] h4,
+html[lang='mr'] h5,
+html[lang='mr'] h6,
+html[lang='mr'] p,
+html[lang='mr'] span,
+html[lang='mr'] li,
+html[lang='mr'] td,
+html[lang='mr'] th,
+html[lang='mr'] label,
+html[lang='mr'] button {
+  font-family: 'Tiro Devanagari Marathi', 'Mukta', serif;
+  letter-spacing: normal !important;
+}
+
+html[lang='mr'] .uppercase {
+  text-transform: none !important;
+  letter-spacing: normal !important;
+}
+
 button,
 input,
 select,
 textarea {
   font: inherit;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 
-/* Strong / important totals – Mukta 700 */
-strong,
-b,
-.font-bold,
-.font-extrabold {
-  font-weight: 700;
+/* ── Internal Scroll Containers (Modern Web Guidance Best Practices) ── */
+
+.pos-scroll {
+  overflow-y: auto;
+  overflow-x: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
 }
 
-/* ── Utility classes ─────────────────────────────────────────── */
-
-.devanagari {
-  font-family: 'Mukta', system-ui, sans-serif;
+.pos-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
-.english {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, sans-serif;
+.pos-scroll::-webkit-scrollbar-track {
+  background: #ECDFC8;
+  border-radius: 9999px;
 }
 
-/* ── Marathi typography: neutralize letter-spacing & uppercase ─ */
-
-html[lang="mr"] .uppercase,
-html[lang="mr"] [class*="tracking-"] {
-  letter-spacing: normal !important;
+.pos-scroll::-webkit-scrollbar-thumb {
+  background: #ECB390;
+  border-radius: 9999px;
 }
 
-html[lang="mr"] .uppercase {
-  text-transform: none !important;
+.pos-scroll::-webkit-scrollbar-thumb:hover {
+  background: #DF7861;
 }
 
-/* Headings in Marathi: no extra letter-spacing */
-html[lang="mr"] h1,
-html[lang="mr"] h2,
-html[lang="mr"] h3,
-html[lang="mr"] h4,
-html[lang="mr"] h5,
-html[lang="mr"] h6 {
-  letter-spacing: normal;
+/* Sticky Table Headers */
+.pos-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
 }
 
-/* ── Global resets ───────────────────────────────────────────── */
-
-* {
-  box-sizing: border-box;
+.pos-table thead {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 10;
 }
 
-#root {
-  min-height: 100vh;
+/* ── Floating Toast Notifications (Top Layer Popover & Fallback) ───── */
+
+.toast-popover-stack[popover]:is(:popover-open, .\:popover-open) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
-input,
-button,
-select {
-  transition: all 0.2s ease;
+.toast-popover-stack {
+  position: fixed;
+  inset: 3.75rem 1rem auto auto;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  z-index: 9999;
+  pointer-events: none;
+  max-width: min(420px, calc(100dvw - 2rem));
+  width: 100%;
+}
+
+.toast-card {
+  pointer-events: auto;
+  transition: opacity 0.2s ease, transform 0.2s ease, display 0.2s ease allow-discrete;
+}
+
+@starting-style {
+  .toast-card {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
 }
 
 /* ── No browser number spinners (manual numpad entry) ─────────── */
@@ -232,7 +288,7 @@ input[type='number'] {
   appearance: textfield;
 }
 
-/* ── Print receipt / label styles (unchanged) ────────────────── */
+/* ── Print receipt / label styles ────────────────────────────── */
 
 .print-receipt-root {
   position: fixed;
@@ -320,25 +376,28 @@ input[type='number'] {
 .label-dialog-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(24, 24, 27, 0.45);
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 50;
+  z-index: 60;
 }
 
 .label-dialog-card {
-  width: min(420px, calc(100vw - 32px));
+  width: min(400px, calc(100dvw - 32px));
   background: #fff;
-  border-radius: 18px;
-  box-shadow: 0 30px 60px rgba(15, 23, 42, 0.2);
-  padding: 22px;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25);
+  padding: 20px;
 }
 
 .label-dialog-title {
-  font-size: 1.3rem;
-  font-weight: 600;
-  margin-bottom: 16px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 14px;
 }
 
 .label-dialog-field {
@@ -353,34 +412,34 @@ input[type='number'] {
 .label-dialog-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
-  margin-top: 18px;
+  gap: 10px;
+  margin-top: 16px;
 }
 
 .label-dialog-cancel,
 .label-dialog-confirm {
   border: none;
-  border-radius: 10px;
-  padding: 10px 16px;
-  font-weight: 600;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-weight: 700;
   cursor: pointer;
 }
 
 .label-dialog-cancel {
-  background: #e7e5e4;
-  color: #292524;
+  background: #e2e8f0;
+  color: #1e293b;
 }
 
 .label-dialog-confirm {
-  background: #0f766e;
+  background: #047857;
   color: #fff;
 }
 
 .input-field input {
   width: 100px;
-  border: 1px solid #d6d3d1;
+  border: 1px solid #cbd5e1;
   border-radius: 8px;
-  padding: 8px 10px;
+  padding: 6px 10px;
 }
 
 /* ── Print media ─────────────────────────────────────────────── */
@@ -396,25 +455,29 @@ input[type='number'] {
     margin: 0;
   }
 
-  /* Reset zoom for print – keep original print sizes */
   :root {
     font-size: 16px;
   }
 
   html,
-  body {
+  body,
+  #root {
     margin: 0 !important;
     padding: 0 !important;
     background: #fff !important;
     width: 80mm !important;
     max-width: 80mm !important;
+    height: auto !important;
+    max-height: none !important;
     overflow: visible !important;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
 
   .app-shell,
-  .app-shell * {
+  .app-shell *,
+  .toast-popover-stack,
+  .toast-popover-stack * {
     display: none !important;
     visibility: hidden !important;
   }
@@ -450,9 +513,6 @@ input[type='number'] {
     box-shadow: none !important;
     border: none !important;
     overflow: visible !important;
-    left: auto !important;
-    top: auto !important;
-    opacity: 1 !important;
   }
 
   .barcode-label-print-root {
@@ -489,7 +549,7 @@ input[type='number'] {
     border: none !important;
     border-radius: 0 !important;
     box-shadow: none !important;
-    font-family: 'Mukta', system-ui, sans-serif !important;
+    font-family: 'Tiro Devanagari Marathi', 'Mukta', serif !important;
     font-size: 12px !important;
     line-height: 1.35 !important;
   }
@@ -515,9 +575,9 @@ input[type='number'] {
   }
 
   .receipt-shop-name {
+    font-family: 'Tiro Devanagari Marathi', serif !important;
     font-size: 15px !important;
     font-weight: 700 !important;
-    letter-spacing: 0.02em;
     margin-bottom: 1mm !important;
     text-align: center !important;
   }
@@ -598,7 +658,6 @@ input[type='number'] {
   .receipt-table-header {
     font-size: 7.4px !important;
     font-weight: 700 !important;
-    letter-spacing: 0.01em !important;
     margin: 0 !important;
   }
 
@@ -685,6 +744,7 @@ input[type='number'] {
   }
 
   .receipt-footer {
+    font-family: 'Tiro Devanagari Marathi', serif !important;
     margin-top: 2mm !important;
     text-align: center !important;
     font-size: 8px !important;
@@ -692,15 +752,7 @@ input[type='number'] {
   }
 
   button,
-  .fixed,
-  .shadow-2xl,
-  .rounded-3xl,
-  .rounded-2xl,
-  .p-6,
-  .p-5,
-  .border,
-  .bg-black\/50,
-  .backdrop-blur-sm {
+  .fixed {
     display: none !important;
     visibility: hidden !important;
   }

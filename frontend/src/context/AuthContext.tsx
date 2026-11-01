@@ -9,6 +9,7 @@ interface AuthContextType {
   loading: boolean
   login: (username: string, password: string) => Promise<CurrentUser | null>
   logout: () => void
+  refreshProfile: () => Promise<void>
   isAuthenticated: boolean
 }
 
@@ -99,12 +100,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setCurrentUser(null)
   }
 
+  const refreshProfile = async () => {
+    if (token) {
+      await fetchProfile(token)
+    }
+  }
+
   const value: AuthContextType = {
     token,
     currentUser,
     loading,
     login,
     logout,
+    refreshProfile,
     isAuthenticated: !!currentUser,
   }
 

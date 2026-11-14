@@ -15,7 +15,7 @@ from typing import Any
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.auth import create_access_token, get_current_user, hash_password, require_role, verify_password
@@ -1352,13 +1352,32 @@ def list_frequent_products(
 ) -> list[dict[str, Any]]:
     db: Session = SessionLocal()
     try:
-        rows = (
+        cancelled_parents = {
+            int(row.parent_invoice_id)
+            for row in db.query(Invoice).filter(
+                Invoice.status == InvoiceStatus.CANCELLED,
+                Invoice.parent_invoice_id.is_not(None),
+            ).all()
+            if row.parent_invoice_id is not None
+        }
+        q = (
             db.query(Product, func.count(InvoiceItem.id).label('frequency'))
             .join(InvoiceItem, InvoiceItem.product_id == Product.id)
             .join(Invoice, Invoice.id == InvoiceItem.invoice_id)
             .filter(Product.is_active.is_(True))
             .filter(Invoice.status == InvoiceStatus.COMPLETED)
-            .group_by(Product.id)
+            .filter(Invoice.parent_invoice_id.is_(None))
+            .filter(
+                or_(
+                    Invoice.payment_status.is_(None),
+                    ~Invoice.payment_status.in_(['RETURN', 'UDHARI_PAID', 'UDHARI_PARTIAL_PAID']),
+                )
+            )
+        )
+        if cancelled_parents:
+            q = q.filter(~Invoice.id.in_(cancelled_parents))
+        rows = (
+            q.group_by(Product.id)
             .order_by(func.count(InvoiceItem.id).desc(), Product.name_mr.asc())
             .limit(limit)
             .all()
@@ -1711,10 +1730,19 @@ def create_bill(
                 }
             )
 
-        bill_discount = Decimal(str(payload.discount or 0.0))
+        bill_discount = Decimal(str(payload.discount or 0.0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        if bill_discount < Decimal('0.00'):
+            bill_discount = Decimal('0.00')
+        if bill_discount > subtotal:
+            bill_discount = subtotal
         grand_total = subtotal - bill_discount
         if grand_total < Decimal('0.00'):
             grand_total = Decimal('0.00')
+
+        if bill_discount > Decimal('0.00') and subtotal > Decimal('0.00'):
+            discount_ratio = grand_total / subtotal
+            total_tax = (total_tax * discount_ratio).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            total_taxable = max(Decimal('0.00'), grand_total - total_tax)
 
         cgst = (total_tax / Decimal('2.00')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         sgst = total_tax - cgst
@@ -1775,7 +1803,7 @@ def create_bill(
                 invoice_id=invoice.id,
                 amount=initial_paid,
                 payment_mode=(payload.initial_payment_mode or 'CASH').upper(),
-                reference_note='Initial partial payment at billing counter',
+                reference_note=INITIAL_CREDIT_PAYMENT_NOTE,
                 recorded_by=user.id,
                 settled_at=now,
             )
@@ -1860,37 +1888,229 @@ def create_bill(
 
 # ── Invoices & History Endpoints ─────────────────────────────────────
 
+INITIAL_CREDIT_PAYMENT_NOTE = 'Initial partial payment at billing counter'
+
+
+def get_cancelled_parent_ids(db: Session, invoice_ids: list[int] | None = None) -> set[int]:
+    q = db.query(Invoice.parent_invoice_id).filter(
+        Invoice.status == InvoiceStatus.CANCELLED,
+        Invoice.parent_invoice_id.is_not(None),
+    )
+    if invoice_ids is not None:
+        if not invoice_ids:
+            return set()
+        q = q.filter(Invoice.parent_invoice_id.in_(invoice_ids))
+    return {int(row[0]) for row in q.all() if row[0] is not None}
+
+
+def build_credit_settlement_info_map(
+    db: Session,
+    invoice_ids: list[int] | None = None,
+) -> dict[int, dict[str, Any]]:
+    q = db.query(CreditSettlement)
+    if invoice_ids is not None:
+        if not invoice_ids:
+            return {}
+        q = q.filter(CreditSettlement.invoice_id.in_(invoice_ids))
+
+    info_map: dict[int, dict[str, Any]] = {}
+    for s in q.all():
+        entry = info_map.setdefault(
+            s.invoice_id,
+            {'total_settled': 0.0, 'has_initial_record': False},
+        )
+        entry['total_settled'] = round_cur(entry['total_settled'] + float(s.amount or 0.0))
+        if (s.reference_note or '').strip() == INITIAL_CREDIT_PAYMENT_NOTE:
+            entry['has_initial_record'] = True
+    return info_map
+
+
+def build_return_summary_map(
+    db: Session,
+    parent_invoice_ids: list[int] | None = None,
+) -> dict[int, dict[str, float]]:
+    q = db.query(Invoice).filter(
+        Invoice.parent_invoice_id.is_not(None),
+        Invoice.payment_status == 'RETURN',
+        Invoice.status == InvoiceStatus.COMPLETED,
+    )
+    if parent_invoice_ids is not None:
+        if not parent_invoice_ids:
+            return {}
+        q = q.filter(Invoice.parent_invoice_id.in_(parent_invoice_ids))
+
+    ret_map: dict[int, dict[str, float]] = {}
+    for r in q.all():
+        if r.parent_invoice_id is None:
+            continue
+        pid = int(r.parent_invoice_id)
+        entry = ret_map.setdefault(
+            pid,
+            {'returned_total': 0.0, 'cash_refunded': 0.0, 'udhari_deducted': 0.0},
+        )
+        r_total = float(r.grand_total or 0.0)
+        if r.payment_method == PaymentMethod.CREDIT:
+            r_refund = round_cur(min(r_total, max(0.0, float(r.paid_amount or 0.0))))
+            r_udhari = round_cur(max(0.0, r_total - r_refund))
+        else:
+            r_refund = round_cur(r_total)
+            r_udhari = 0.0
+        entry['returned_total'] = round_cur(entry['returned_total'] + r_total)
+        entry['cash_refunded'] = round_cur(entry['cash_refunded'] + r_refund)
+        entry['udhari_deducted'] = round_cur(entry['udhari_deducted'] + r_udhari)
+    return ret_map
+
+
+def compute_invoice_accounting(
+    invoice: Invoice,
+    settlement_info_map: dict[int, dict[str, Any]] | None = None,
+    return_summary_map: dict[int, dict[str, float]] | None = None,
+    cancelled_parent_ids: set[int] | None = None,
+    settled_map: dict[int, float] | None = None,
+) -> dict[str, Any]:
+    total_amt = round_cur(float(invoice.grand_total or 0.0))
+    raw_pay_status = (invoice.payment_status or '').strip()
+    is_credit = invoice.payment_method == PaymentMethod.CREDIT
+    has_cancel_child = bool(cancelled_parent_ids and invoice.id in cancelled_parent_ids)
+
+    # 1. Cancelled audit record
+    if invoice.status == InvoiceStatus.CANCELLED:
+        return {
+            'paid_amount': 0.0,
+            'balance_due': 0.0,
+            'payment_status': 'CANCELLED',
+            'returned_amount': 0.0,
+            'udhari_deducted': 0.0,
+            'cash_refund': 0.0,
+            'net_paid_amount': 0.0,
+            'effective_grand_total': 0.0,
+            'has_cancel_record': has_cancel_child,
+        }
+
+    # 2. Child RETURN bill
+    if raw_pay_status == 'RETURN':
+        if is_credit:
+            cash_refund = round_cur(min(total_amt, max(0.0, float(invoice.paid_amount or 0.0))))
+            udhari_deducted = round_cur(max(0.0, total_amt - cash_refund))
+        else:
+            cash_refund = total_amt
+            udhari_deducted = 0.0
+        return {
+            'paid_amount': cash_refund,
+            'balance_due': 0.0,
+            'payment_status': 'RETURN',
+            'returned_amount': total_amt,
+            'udhari_deducted': udhari_deducted,
+            'cash_refund': cash_refund,
+            'net_paid_amount': cash_refund,
+            'effective_grand_total': total_amt,
+            'has_cancel_record': has_cancel_child,
+        }
+
+    # 3. Child UDHARI_PAID / UDHARI_PARTIAL_PAID settlement receipt
+    if raw_pay_status in ('UDHARI_PAID', 'UDHARI_PARTIAL_PAID'):
+        paid_amt = round_cur(float(invoice.paid_amount if invoice.paid_amount is not None else total_amt))
+        bal_due = round_cur(max(0.0, float(invoice.balance_due or 0.0)))
+        return {
+            'paid_amount': paid_amt,
+            'balance_due': bal_due,
+            'payment_status': raw_pay_status,
+            'returned_amount': 0.0,
+            'udhari_deducted': 0.0,
+            'cash_refund': 0.0,
+            'net_paid_amount': paid_amt,
+            'effective_grand_total': total_amt,
+            'has_cancel_record': has_cancel_child,
+        }
+
+    # 4. Parent Sales Bill
+    ret_info = (return_summary_map or {}).get(invoice.id, {})
+    returned_total = round_cur(min(total_amt, float(ret_info.get('returned_total', 0.0))))
+    effective_grand_total = round_cur(max(0.0, total_amt - returned_total))
+
+    if is_credit:
+        if settlement_info_map is not None and invoice.id in settlement_info_map:
+            s_info = settlement_info_map[invoice.id]
+            settled_sum = float(s_info.get('total_settled', 0.0))
+            if s_info.get('has_initial_record'):
+                gross_paid = round_cur(min(total_amt, settled_sum))
+            else:
+                init_paid = float(invoice.paid_amount or 0.0)
+                gross_paid = round_cur(min(total_amt, init_paid + settled_sum))
+        elif settled_map is not None and invoice.id in settled_map:
+            gross_paid = round_cur(min(total_amt, float(settled_map[invoice.id] or 0.0)))
+        else:
+            gross_paid = round_cur(min(total_amt, float(invoice.paid_amount or 0.0)))
+
+        cash_refunded = round_cur(min(gross_paid, float(ret_info.get('cash_refunded', 0.0))))
+        udhari_deducted = round_cur(max(0.0, returned_total - cash_refunded))
+        net_paid = round_cur(max(0.0, gross_paid - cash_refunded))
+        bal_due = 0.0 if has_cancel_child else round_cur(max(0.0, effective_grand_total - net_paid))
+
+        if has_cancel_child:
+            pay_status = 'CANCELLED'
+        elif bal_due <= 0.01:
+            pay_status = 'PAID'
+        elif net_paid > 0.0:
+            pay_status = 'PARTIAL'
+        else:
+            pay_status = 'CREDIT_DUE'
+    else:
+        gross_paid = total_amt
+        cash_refunded = returned_total
+        udhari_deducted = 0.0
+        net_paid = effective_grand_total
+        bal_due = 0.0
+        pay_status = 'CANCELLED' if has_cancel_child else (raw_pay_status or 'PAID')
+
+    return {
+        'paid_amount': net_paid,
+        'balance_due': bal_due,
+        'payment_status': pay_status,
+        'returned_amount': returned_total,
+        'udhari_deducted': udhari_deducted,
+        'cash_refund': cash_refunded,
+        'net_paid_amount': net_paid,
+        'effective_grand_total': effective_grand_total,
+        'has_cancel_record': has_cancel_child,
+    }
+
 
 def serialize_invoice_summary(
     invoice: Invoice,
     cancelled_parent_ids: set[int] | None = None,
     settled_map: dict[int, float] | None = None,
+    settlement_info_map: dict[int, dict[str, Any]] | None = None,
+    return_summary_map: dict[int, dict[str, float]] | None = None,
 ) -> dict[str, Any]:
     creator_name = invoice.creator.name if invoice.creator else 'Unknown'
     creator_username = invoice.creator.username if invoice.creator else 'unknown'
-    total_amt = float(invoice.grand_total or 0.0)
-    is_credit = invoice.payment_method == PaymentMethod.CREDIT
+    total_amt = round_cur(float(invoice.grand_total or 0.0))
 
-    if is_credit:
-        settled_amt = settled_map.get(invoice.id, 0.0) if settled_map is not None else 0.0
-        init_paid = float(invoice.paid_amount or 0.0)
-        # Total paid includes counter down-payment plus all recorded installments
-        paid_amt = round_cur(min(total_amt, init_paid + settled_amt))
-        if invoice.payment_status == 'PAID':
-            paid_amt = total_amt
-        bal_due = round_cur(max(0.0, total_amt - paid_amt))
-        if bal_due <= 0.01:
-            pay_status = 'PAID'
-        elif paid_amt > 0.0:
-            pay_status = 'PARTIAL'
-        else:
-            pay_status = 'CREDIT_DUE'
-    else:
-        paid_amt = total_amt
-        bal_due = 0.0
-        pay_status = invoice.payment_status or ('CANCELLED' if invoice.status == InvoiceStatus.CANCELLED else 'PAID')
+    acct = compute_invoice_accounting(
+        invoice,
+        settlement_info_map=settlement_info_map,
+        return_summary_map=return_summary_map,
+        cancelled_parent_ids=cancelled_parent_ids,
+        settled_map=settled_map,
+    )
 
-    has_cancel_child = bool(cancelled_parent_ids and invoice.id in cancelled_parent_ids)
+    items_list = invoice.invoice_items or []
+    all_items_returned = bool(items_list) and all(
+        float(getattr(item, 'returned_quantity', 0) or 0) >= float(item.quantity or 0) - 1e-6
+        for item in items_list
+    )
+
+    is_child_record = (
+        invoice.parent_invoice_id is not None
+        or (invoice.payment_status or '') in ('RETURN', 'UDHARI_PAID', 'UDHARI_PARTIAL_PAID')
+    )
+    can_cancel = bool(
+        invoice.status == InvoiceStatus.COMPLETED
+        and not is_child_record
+        and not acct['has_cancel_record']
+        and not all_items_returned
+    )
 
     return {
         'id': invoice.id,
@@ -1904,13 +2124,20 @@ def serialize_invoice_summary(
         'sgst_amount': float(invoice.sgst_amount or 0.0),
         'amount': total_amt,
         'grand_total': total_amt,
-        'paid_amount': paid_amt,
-        'balance_due': bal_due,
+        'paid_amount': acct['paid_amount'],
+        'balance_due': acct['balance_due'],
+        'returned_amount': acct['returned_amount'],
+        'udhari_deducted': acct['udhari_deducted'],
+        'cash_refund': acct['cash_refund'],
+        'net_paid_amount': acct['net_paid_amount'],
+        'effective_grand_total': acct['effective_grand_total'],
+        'all_items_returned': all_items_returned,
+        'can_cancel': can_cancel,
         'payment_method': invoice.payment_method.value,
-        'payment_status': pay_status,
+        'payment_status': acct['payment_status'],
         'status': invoice.status.value,
         'parent_invoice_id': invoice.parent_invoice_id,
-        'has_cancel_record': has_cancel_child,
+        'has_cancel_record': acct['has_cancel_record'],
         'created_by': invoice.created_by,
         'created_by_name': creator_name,
         'created_by_username': creator_username,
@@ -1920,7 +2147,7 @@ def serialize_invoice_summary(
         'cash_tendered': float(invoice.cash_tendered) if invoice.cash_tendered is not None else None,
         'change_returned': float(invoice.change_returned) if invoice.change_returned is not None else None,
         'notes': invoice.notes,
-        'items_count': len(invoice.invoice_items) if invoice.invoice_items else 0,
+        'items_count': len(items_list),
     }
 
 
@@ -1929,8 +2156,24 @@ def serialize_invoice_detail(
     cancelled_parent_ids: set[int] | None = None,
     settled_map: dict[int, float] | None = None,
     db: Session | None = None,
+    settlement_info_map: dict[int, dict[str, Any]] | None = None,
+    return_summary_map: dict[int, dict[str, float]] | None = None,
 ) -> dict[str, Any]:
-    summary = serialize_invoice_summary(invoice, cancelled_parent_ids=cancelled_parent_ids, settled_map=settled_map)
+    if db is not None:
+        if cancelled_parent_ids is None:
+            cancelled_parent_ids = get_cancelled_parent_ids(db, [invoice.id])
+        if settlement_info_map is None:
+            settlement_info_map = build_credit_settlement_info_map(db, [invoice.id])
+        if return_summary_map is None:
+            return_summary_map = build_return_summary_map(db, [invoice.id])
+
+    summary = serialize_invoice_summary(
+        invoice,
+        cancelled_parent_ids=cancelled_parent_ids,
+        settled_map=settled_map,
+        settlement_info_map=settlement_info_map,
+        return_summary_map=return_summary_map,
+    )
     summary['items'] = [
         {
             'id': item.id,
@@ -1960,13 +2203,14 @@ def serialize_invoice_detail(
     has_cancel_child = summary.get('has_cancel_record', False)
 
     any_returnable = any(
-        float(item.quantity) > float(getattr(item, 'returned_quantity', 0) or 0)
+        float(item.quantity) > float(getattr(item, 'returned_quantity', 0) or 0) + 1e-6
         for item in invoice.invoice_items
     ) if invoice.invoice_items else False
 
     is_returnable = bool(
         invoice.status == InvoiceStatus.COMPLETED
-        and (invoice.payment_status or '') not in ('RETURN', 'CANCELLED')
+        and invoice.parent_invoice_id is None
+        and (invoice.payment_status or '') not in ('RETURN', 'CANCELLED', 'UDHARI_PAID', 'UDHARI_PARTIAL_PAID')
         and not has_cancel_child
         and elapsed_hours <= 7.0
         and any_returnable
@@ -2071,25 +2315,18 @@ def list_invoices(
                     pass
 
         invoices = q.order_by(Invoice.created_at.desc(), Invoice.id.desc()).all()
+        inv_ids = [inv.id for inv in invoices]
 
-        # Compute cancelled parent IDs and credit settlements map
-        cancelled_parents = {
-            int(row.parent_invoice_id)
-            for row in db.query(Invoice).filter(
-                Invoice.status == InvoiceStatus.CANCELLED,
-                Invoice.parent_invoice_id.is_not(None),
-            ).all()
-            if row.parent_invoice_id is not None
-        }
-        settled_map: dict[int, float] = {}
-        for s in db.query(CreditSettlement).all():
-            settled_map[s.invoice_id] = round_cur(settled_map.get(s.invoice_id, 0.0) + float(s.amount))
+        cancelled_parents = get_cancelled_parent_ids(db, inv_ids)
+        settlement_info_map = build_credit_settlement_info_map(db, inv_ids)
+        return_summary_map = build_return_summary_map(db, inv_ids)
 
         result = [
             serialize_invoice_summary(
                 invoice,
                 cancelled_parent_ids=cancelled_parents,
-                settled_map=settled_map,
+                settlement_info_map=settlement_info_map,
+                return_summary_map=return_summary_map,
             )
             for invoice in invoices
         ]
@@ -2123,10 +2360,14 @@ def export_invoices_csv(
             'Customer Name',
             'Customer Phone',
             'Payment Method',
+            'Payment Status',
             'Subtotal (₹)',
             'Discount (₹)',
             'Tax (₹)',
             'Grand Total (₹)',
+            'Paid Amount (₹)',
+            'Returned Amount (₹)',
+            'Balance Due (₹)',
             'Status',
             'Cashier',
         ]
@@ -2139,10 +2380,14 @@ def export_invoices_csv(
                 inv.get('customer_name') or '-',
                 inv.get('customer_phone') or '-',
                 inv['payment_method'],
+                inv.get('payment_status') or '-',
                 inv['subtotal'],
                 inv['discount'],
                 inv['tax_amount'],
                 inv['grand_total'],
+                inv.get('paid_amount', 0.0),
+                inv.get('returned_amount', 0.0),
+                inv.get('balance_due', 0.0),
                 inv['status'],
                 inv['created_by_name'],
             ]
@@ -2163,18 +2408,7 @@ def get_invoice(invoice_id: int, user: User = Depends(get_current_user)) -> dict
         invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
         if invoice is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Invoice not found')
-        cancelled_parents = {
-            int(row.parent_invoice_id)
-            for row in db.query(Invoice).filter(
-                Invoice.status == InvoiceStatus.CANCELLED,
-                Invoice.parent_invoice_id == invoice.id,
-            ).all()
-            if row.parent_invoice_id is not None
-        }
-        settled_map: dict[int, float] = {}
-        for s in db.query(CreditSettlement).filter(CreditSettlement.invoice_id == invoice.id).all():
-            settled_map[s.invoice_id] = round_cur(settled_map.get(s.invoice_id, 0.0) + float(s.amount))
-        result = serialize_invoice_detail(invoice, cancelled_parent_ids=cancelled_parents, settled_map=settled_map, db=db)
+        result = serialize_invoice_detail(invoice, db=db)
     finally:
         db.close()
     return result
@@ -2197,6 +2431,16 @@ def cancel_invoice(
                 detail='This bill is already a cancelled record.',
             )
 
+        if invoice.parent_invoice_id is not None or (invoice.payment_status or '') in (
+            'RETURN',
+            'UDHARI_PAID',
+            'UDHARI_PARTIAL_PAID',
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='या प्रकारचे परत/जमा संलग्न बिल थेट रद्द करता येत नाही (Cannot cancel a linked return or settlement bill).',
+            )
+
         existing_cancel = (
             db.query(Invoice)
             .filter(
@@ -2211,12 +2455,30 @@ def cancel_invoice(
                 detail=f'Bill {invoice.invoice_number} was already cancelled via {existing_cancel.invoice_number}.',
             )
 
+        if invoice.invoice_items and all(
+            float(getattr(item, 'returned_quantity', 0) or 0) >= float(item.quantity or 0) - 1e-6
+            for item in invoice.invoice_items
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='या बिलामधील सर्व वस्तू आधीच परत केल्या आहेत, त्यामुळे हे बिल रद्द करता येणार नाही (All items already returned).',
+            )
+
+        s_map = build_credit_settlement_info_map(db, [invoice.id])
+        r_map = build_return_summary_map(db, [invoice.id])
+        acct = compute_invoice_accounting(invoice, settlement_info_map=s_map, return_summary_map=r_map)
+        customer_cash_refund = acct['net_paid_amount']
+
         store_settings = db.query(StoreSettings).first()
         prefix = (store_settings.invoice_prefix if store_settings else 'INV').strip() or 'INV'
         latest_invoice = db.query(Invoice).order_by(Invoice.id.desc()).first()
         sequence = int((latest_invoice.id if latest_invoice else 0)) + 1
         new_cancel_number = f'{prefix}-{sequence:06d}'
         now = utcnow()
+
+        cancel_note = f'बिल रद्द नोंद (मूळ बिल: {invoice.invoice_number}) | Cancelled Bill for {invoice.invoice_number}'
+        if customer_cash_refund > 0:
+            cancel_note += f' | ग्राहकास परतावा: ₹{customer_cash_refund:.2f}'
 
         # Append-only immutable bill history: keep original `invoice` untouched,
         # and insert a new Invoice record with status=CANCELLED and current timestamp.
@@ -2241,18 +2503,22 @@ def cancel_invoice(
             customer_name=invoice.customer_name,
             customer_phone=invoice.customer_phone,
             payment_reference=invoice.invoice_number,
-            notes=f'बिल रद्द नोंद (मूळ बिल: {invoice.invoice_number}) | Cancelled Bill for {invoice.invoice_number}',
+            notes=cancel_note,
         )
         db.add(cancelled_bill)
         db.flush()
 
         for item in invoice.invoice_items:
+            sold_q = Decimal(str(item.quantity or 0))
+            prev_ret_q = Decimal(str(getattr(item, 'returned_quantity', 0) or 0))
+            unreturned_q = max(Decimal('0'), sold_q - prev_ret_q)
+
             copied_item = InvoiceItem(
                 invoice_id=cancelled_bill.id,
                 product_id=item.product_id,
                 product_name_mr=item.product_name_mr,
-                quantity=item.quantity,
-                returned_quantity=item.quantity,
+                quantity=float(unreturned_q),
+                returned_quantity=float(unreturned_q),
                 unit_price=item.unit_price,
                 discount=item.discount,
                 gst_rate=item.gst_rate,
@@ -2261,15 +2527,15 @@ def cancel_invoice(
             )
             db.add(copied_item)
 
-            if item.product_id is not None:
+            if item.product_id is not None and unreturned_q > Decimal('0'):
                 product = db.query(Product).filter(Product.id == item.product_id).first()
                 if product is not None:
-                    product.current_stock = int(product.current_stock) + int(item.quantity)
+                    product.current_stock = int(Decimal(str(product.current_stock)) + unreturned_q)
 
                 return_movement = StockMovement(
                     product_id=item.product_id,
                     type=StockMovementType.RETURN,
-                    quantity=float(item.quantity),
+                    quantity=float(unreturned_q),
                     reference_id=new_cancel_number,
                     created_at=now,
                 )
@@ -2279,11 +2545,12 @@ def cancel_invoice(
             db,
             'CANCEL_INVOICE',
             user.id,
-            f'Created cancelled bill {new_cancel_number} for original bill {invoice.invoice_number}',
+            f'Created cancelled bill {new_cancel_number} for original bill {invoice.invoice_number} (Cash refund: ₹{customer_cash_refund:.2f})',
         )
         db.commit()
         db.refresh(cancelled_bill)
-        result = serialize_invoice_detail(cancelled_bill)
+        result = serialize_invoice_detail(cancelled_bill, db=db)
+        result['cash_refund'] = customer_cash_refund
     except HTTPException:
         db.rollback()
         raise
@@ -2311,6 +2578,26 @@ def return_invoice_items(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Bill not found.')
         if invoice.status == InvoiceStatus.CANCELLED:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Cannot return items from a cancelled bill.')
+        if invoice.parent_invoice_id is not None or (invoice.payment_status or '') in (
+            'RETURN',
+            'UDHARI_PAID',
+            'UDHARI_PARTIAL_PAID',
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='संलग्न परत किंवा उधारी जमा बिलामधून वस्तू परत करता येत नाहीत (Cannot return items from a linked child bill).',
+            )
+
+        existing_cancel = (
+            db.query(Invoice)
+            .filter(Invoice.parent_invoice_id == invoice.id, Invoice.status == InvoiceStatus.CANCELLED)
+            .first()
+        )
+        if existing_cancel is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f'रद्द केलेल्या बिलामधून वस्तू परत घेता येत नाहीत (Cancelled via {existing_cancel.invoice_number}).',
+            )
 
         now = utcnow()
         inv_dt = invoice.created_at or invoice.invoice_date
@@ -2330,6 +2617,29 @@ def return_invoice_items(
                 detail='वस्तू परत करण्याचे कारण (किमान ३ अक्षरे) प्रविष्ट करणे अनिवार्य आहे.',
             )
 
+        # Compute pre-return balance & paid state cleanly before modifying returned_quantity
+        s_map = build_credit_settlement_info_map(db, [invoice.id])
+        r_map = build_return_summary_map(db, [invoice.id])
+        pre_return_acct = compute_invoice_accounting(invoice, settlement_info_map=s_map, return_summary_map=r_map)
+
+        prior_returns = (
+            db.query(Invoice)
+            .filter(
+                Invoice.parent_invoice_id == invoice.id,
+                Invoice.payment_status == 'RETURN',
+                Invoice.status == InvoiceStatus.COMPLETED,
+            )
+            .all()
+        )
+        prior_return_discount_sum = sum(Decimal(str(r.discount or 0.0)) for r in prior_returns)
+        prior_return_grand_sum = sum(Decimal(str(r.grand_total or 0.0)) for r in prior_returns)
+
+        items_subtotal_sum = sum(Decimal(str(i.total or 0)) for i in invoice.invoice_items)
+        orig_subtotal = Decimal(str(invoice.subtotal or 0))
+        discount_base_subtotal = items_subtotal_sum if items_subtotal_sum > Decimal('0.00') else orig_subtotal
+        orig_bill_discount = Decimal(str(invoice.discount or 0.0))
+        orig_grand_total = Decimal(str(invoice.grand_total or 0.0))
+
         store_settings = db.query(StoreSettings).first()
         is_tax_inclusive = store_settings.tax_inclusive if store_settings else True
 
@@ -2340,8 +2650,8 @@ def return_invoice_items(
 
         returned_items_records: list[dict[str, Any]] = []
         total_return_subtotal = Decimal('0.00')
+        total_return_taxable = Decimal('0.00')
         total_return_tax = Decimal('0.00')
-        total_return_grand = Decimal('0.00')
 
         for req_item in payload.items:
             inv_item = (
@@ -2390,23 +2700,24 @@ def return_invoice_items(
             inv_item.returned_quantity = float(prev_returned + ret_qty)
 
             # Restore stock
-            product = db.query(Product).filter(Product.id == inv_item.product_id).first()
-            if product is not None:
-                product.current_stock = int(Decimal(str(product.current_stock)) + ret_qty)
+            if inv_item.product_id is not None:
+                product = db.query(Product).filter(Product.id == inv_item.product_id).first()
+                if product is not None:
+                    product.current_stock = int(Decimal(str(product.current_stock)) + ret_qty)
 
-            db.add(
-                StockMovement(
-                    product_id=inv_item.product_id,
-                    type=StockMovementType.RETURN,
-                    quantity=float(ret_qty),
-                    reference_id=return_invoice_number,
-                    created_at=now,
+                db.add(
+                    StockMovement(
+                        product_id=inv_item.product_id,
+                        type=StockMovementType.RETURN,
+                        quantity=float(ret_qty),
+                        reference_id=return_invoice_number,
+                        created_at=now,
+                    )
                 )
-            )
 
             total_return_subtotal += line_total
+            total_return_taxable += line_taxable
             total_return_tax += line_tax
-            total_return_grand += line_total
 
             returned_items_records.append({
                 'product_id': inv_item.product_id,
@@ -2422,51 +2733,84 @@ def return_invoice_items(
         if not returned_items_records:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='No valid items selected for return.')
 
-        # Udhari adjustment if original invoice is CREDIT
+        # Apportion parent bill-level discount accurately across returns
+        db.flush()
+        is_final_complete_return = bool(invoice.invoice_items) and all(
+            Decimal(str(getattr(i, 'returned_quantity', 0) or 0)) >= Decimal(str(i.quantity or 0)) - Decimal('0.0001')
+            for i in invoice.invoice_items
+        )
+
+        if orig_bill_discount > Decimal('0.00') and discount_base_subtotal > Decimal('0.00'):
+            if is_final_complete_return:
+                remaining_disc_cap = max(Decimal('0.00'), orig_bill_discount - prior_return_discount_sum)
+                remaining_grand_cap = max(Decimal('0.00'), orig_grand_total - prior_return_grand_sum)
+                return_bill_discount = min(total_return_subtotal, remaining_disc_cap)
+                total_return_grand = remaining_grand_cap
+            else:
+                raw_disc_share = (
+                    orig_bill_discount * (total_return_subtotal / discount_base_subtotal)
+                ).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                remaining_disc_cap = max(Decimal('0.00'), orig_bill_discount - prior_return_discount_sum)
+                return_bill_discount = min(total_return_subtotal, raw_disc_share, remaining_disc_cap)
+                total_return_grand = max(Decimal('0.00'), total_return_subtotal - return_bill_discount)
+        else:
+            return_bill_discount = Decimal('0.00')
+            total_return_grand = total_return_subtotal
+
+        # Scale GST & Taxable amounts proportionally when bill-level discount applies
+        if return_bill_discount > Decimal('0.00') and total_return_subtotal > Decimal('0.00'):
+            disc_ratio = total_return_grand / total_return_subtotal
+            adj_return_tax = (total_return_tax * disc_ratio).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            adj_return_taxable = max(Decimal('0.00'), total_return_grand - adj_return_tax)
+        else:
+            adj_return_tax = total_return_tax
+            adj_return_taxable = total_return_taxable
+
+        return_cgst = (adj_return_tax / Decimal('2.00')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        return_sgst = adj_return_tax - return_cgst
+
+        # Udhari deduction vs Customer Cash/UPI Refund calculation
         is_credit = invoice.payment_method == PaymentMethod.CREDIT
+        total_grd = round_cur(total_return_grand)
         udhari_deducted = 0.0
-        cash_refund = float(round_cur(total_return_grand))
+        cash_refund = total_grd
 
         if is_credit:
-            existing_settlements = db.query(CreditSettlement).filter(CreditSettlement.invoice_id == invoice.id).all()
-            settled_sum = sum(float(s.amount) for s in existing_settlements)
-            init_paid = float(invoice.paid_amount or 0.0)
-            total_grand = float(invoice.grand_total)
-
-            prior_returns = db.query(Invoice).filter(
-                Invoice.parent_invoice_id == invoice.id,
-                Invoice.payment_status == 'RETURN',
-            ).all()
-            prior_return_total = sum(float(r.grand_total) for r in prior_returns)
-
-            current_balance_due = max(0.0, round_cur(total_grand - (init_paid + settled_sum + prior_return_total)))
-            refund_val = float(round_cur(total_return_grand))
-            udhari_deducted = round_cur(min(refund_val, current_balance_due))
-            cash_refund = round_cur(refund_val - udhari_deducted)
-            new_balance = max(0.0, round_cur(current_balance_due - udhari_deducted))
+            current_balance_due = float(pre_return_acct['balance_due'])
+            current_net_paid = float(pre_return_acct['net_paid_amount'])
+            udhari_deducted = round_cur(min(total_grd, current_balance_due))
+            cash_refund = round_cur(min(current_net_paid, max(0.0, total_grd - udhari_deducted)))
+            new_balance = round_cur(max(0.0, current_balance_due - udhari_deducted))
+            remaining_paid_after_refund = round_cur(max(0.0, current_net_paid - cash_refund))
             invoice.balance_due = new_balance
             if new_balance <= 0.01:
                 invoice.payment_status = 'PAID'
+            elif remaining_paid_after_refund > 0.0:
+                invoice.payment_status = 'PARTIAL'
+            else:
+                invoice.payment_status = 'CREDIT_DUE'
 
         note_str = f'वस्तू परत नोंद (मूळ बिल: {invoice.invoice_number}) | कारण: {reason_str}'
         if is_credit:
-            note_str += f' | उधारी वजावट: ₹{udhari_deducted:.2f}, रोख परतावा: ₹{cash_refund:.2f}'
+            note_str += f' | उधारी वजावट: ₹{udhari_deducted:.2f}, ग्राहकास परतावा: ₹{cash_refund:.2f}'
+        else:
+            note_str += f' | ग्राहकास परतावा: ₹{cash_refund:.2f}'
 
         # Create brand-new return bill (Append-only immutable architecture)
         total_sub = round_cur(total_return_subtotal)
-        total_tax = round_cur(total_return_tax)
-        total_grd = round_cur(total_return_grand)
+        total_disc = round_cur(return_bill_discount)
+        total_tax_cur = round_cur(adj_return_tax)
         return_bill = Invoice(
             invoice_number=return_invoice_number,
             invoice_date=now,
             subtotal=total_sub,
-            discount=0.0,
-            tax_amount=total_tax,
-            taxable_amount=round_cur(total_return_subtotal - total_return_tax),
-            cgst_amount=round_cur(total_return_tax / Decimal('2.0')),
-            sgst_amount=round_cur(total_return_tax / Decimal('2.0')),
+            discount=total_disc,
+            tax_amount=total_tax_cur,
+            taxable_amount=round_cur(adj_return_taxable),
+            cgst_amount=round_cur(return_cgst),
+            sgst_amount=round_cur(return_sgst),
             grand_total=total_grd,
-            paid_amount=total_grd,
+            paid_amount=cash_refund,
             balance_due=0.0,
             payment_method=invoice.payment_method,
             payment_status='RETURN',
@@ -2498,7 +2842,12 @@ def return_invoice_items(
                 )
             )
 
-        log_audit(db, 'PARTIAL_RETURN_INVOICE', user.id, f'Created return bill {return_invoice_number} for {invoice.invoice_number}')
+        log_audit(
+            db,
+            'PARTIAL_RETURN_INVOICE',
+            user.id,
+            f'Created return bill {return_invoice_number} (₹{total_grd:.2f}) for {invoice.invoice_number} | Udhari deducted: ₹{udhari_deducted:.2f}, Cash refund: ₹{cash_refund:.2f}',
+        )
         db.commit()
         db.refresh(return_bill)
         db.refresh(invoice)
@@ -2508,6 +2857,7 @@ def return_invoice_items(
             'original_invoice': serialize_invoice_detail(invoice, db=db),
             'cash_refund': cash_refund,
             'udhari_deducted': udhari_deducted,
+            'new_balance': float(invoice.balance_due or 0.0),
         }
     except HTTPException:
         db.rollback()
@@ -2523,55 +2873,45 @@ def return_invoice_items(
 def list_credit_accounts(user: User = Depends(get_current_user)) -> list[dict[str, Any]]:
     db: Session = SessionLocal()
     try:
-        cancelled_parents = {
-            int(row.parent_invoice_id)
-            for row in db.query(Invoice).filter(
-                Invoice.status == InvoiceStatus.CANCELLED,
-                Invoice.parent_invoice_id.is_not(None),
-            ).all()
-            if row.parent_invoice_id is not None
-        }
+        cancelled_parents = get_cancelled_parent_ids(db)
         credit_invoices = (
             db.query(Invoice)
             .filter(
                 Invoice.payment_method == PaymentMethod.CREDIT,
                 Invoice.status == InvoiceStatus.COMPLETED,
+                Invoice.parent_invoice_id.is_(None),
+                or_(
+                    Invoice.payment_status.is_(None),
+                    ~Invoice.payment_status.in_(['RETURN', 'UDHARI_PAID', 'UDHARI_PARTIAL_PAID']),
+                ),
             )
             .order_by(Invoice.created_at.desc(), Invoice.id.desc())
             .all()
         )
-        settlements = db.query(CreditSettlement).all()
-        settled_by_inv: dict[int, float] = {}
-        for s in settlements:
-            settled_by_inv[s.invoice_id] = round_cur(settled_by_inv.get(s.invoice_id, 0.0) + float(s.amount))
+        credit_ids = [inv.id for inv in credit_invoices]
+        settlement_info_map = build_credit_settlement_info_map(db, credit_ids)
+        return_summary_map = build_return_summary_map(db, credit_ids)
 
         now = utcnow()
         result = []
         for inv in credit_invoices:
             if inv.id in cancelled_parents:
                 continue
-            total_amt = float(inv.grand_total)
-            settled_sum = settled_by_inv.get(inv.id, 0.0)
-            initial_paid = float(inv.paid_amount or 0.0)
-            paid_amt = round_cur(min(total_amt, initial_paid + settled_sum))
-            if inv.payment_status == 'PAID':
-                paid_amt = total_amt
-            balance_due = max(0.0, round_cur(total_amt - paid_amt))
+            summary = serialize_invoice_summary(
+                inv,
+                cancelled_parent_ids=cancelled_parents,
+                settlement_info_map=settlement_info_map,
+                return_summary_map=return_summary_map,
+            )
             inv_dt = inv.invoice_date
             if inv_dt.tzinfo is None:
                 inv_dt = inv_dt.replace(tzinfo=timezone.utc)
             days_pending = max(0, (now - inv_dt).days)
             result.append(
                 {
-                    **serialize_invoice_summary(
-                        inv,
-                        cancelled_parent_ids=cancelled_parents,
-                        settled_map=settled_by_inv,
-                    ),
-                    'paid_amount': paid_amt,
-                    'balance_due': balance_due,
+                    **summary,
                     'days_pending': days_pending,
-                    'is_settled': balance_due <= 0.01,
+                    'is_settled': summary['balance_due'] <= 0.01,
                 }
             )
         return result
@@ -2590,27 +2930,37 @@ def settle_credit_invoice(
         inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
         if inv is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Bill not found.')
+        if inv.payment_method != PaymentMethod.CREDIT:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Only Udhari (Credit) bills can be settled.')
+        if inv.status == InvoiceStatus.CANCELLED or inv.parent_invoice_id is not None or (inv.payment_status or '') in (
+            'RETURN',
+            'UDHARI_PAID',
+            'UDHARI_PARTIAL_PAID',
+        ):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Cannot settle a cancelled or linked child bill.')
 
-        existing_settlements = (
-            db.query(CreditSettlement).filter(CreditSettlement.invoice_id == invoice_id).all()
-        )
-        initial_paid = float(inv.paid_amount or 0.0)
-        settled_total = sum(float(s.amount) for s in existing_settlements)
-        already_paid = round_cur(initial_paid + settled_total)
-
-        prior_returns = (
+        existing_cancel = (
             db.query(Invoice)
-            .filter(Invoice.parent_invoice_id == inv.id, Invoice.payment_status == 'RETURN')
-            .all()
+            .filter(Invoice.parent_invoice_id == inv.id, Invoice.status == InvoiceStatus.CANCELLED)
+            .first()
         )
-        prior_return_total = sum(float(r.grand_total) for r in prior_returns)
+        if existing_cancel is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f'Cancelled bill ({existing_cancel.invoice_number}) cannot be settled.',
+            )
 
-        total_amt = float(inv.grand_total)
-        remaining = max(0.0, round_cur(total_amt - (already_paid + prior_return_total)))
+        s_map = build_credit_settlement_info_map(db, [inv.id])
+        r_map = build_return_summary_map(db, [inv.id])
+        acct = compute_invoice_accounting(inv, settlement_info_map=s_map, return_summary_map=r_map)
+        remaining = float(acct['balance_due'])
 
-        pay_amt = round_cur(min(float(payload.amount), remaining if remaining > 0 else total_amt))
-        if pay_amt <= 0:
+        if remaining <= 0.01:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='This credit bill is already settled.')
+
+        pay_amt = round_cur(min(float(payload.amount), remaining))
+        if pay_amt <= 0.0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Settlement amount must be greater than zero.')
 
         now = utcnow()
         ref_note = (payload.reference_note or payload.note or '').strip() or None
@@ -2627,9 +2977,11 @@ def settle_credit_invoice(
             settled_at=now,
         )
         db.add(settlement)
-        new_balance = max(0.0, round_cur(remaining - pay_amt))
+        new_balance = round_cur(max(0.0, remaining - pay_amt))
+        inv.balance_due = new_balance
+        inv.payment_status = 'PAID' if new_balance <= 0.01 else 'PARTIAL'
 
-        # Append-only immutable bill history: keep original Udhari bill `inv` untouched,
+        # Append-only immutable bill history: keep original Udhari bill `inv` untouched (except credit ledger status/balance),
         # and create a brand-new Bill with a new sequential Bill ID and status UDHARI_PAID.
         store_settings = db.query(StoreSettings).first()
         prefix = (store_settings.invoice_prefix if store_settings else 'INV').strip() or 'INV'
@@ -2700,7 +3052,7 @@ def settle_credit_invoice(
             'invoice_number': inv.invoice_number,
             'settlement_invoice_id': settlement_invoice.id,
             'settlement_invoice_number': settlement_invoice.invoice_number,
-            'settlement_invoice': serialize_invoice_detail(settlement_invoice),
+            'settlement_invoice': serialize_invoice_detail(settlement_invoice, db=db),
             'paid_now': pay_amt,
             'balance_due': new_balance,
             'payment_status': 'PAID' if new_balance <= 0.01 else 'PARTIAL',
@@ -2760,19 +3112,11 @@ def get_dashboard_stats(user: User = Depends(get_current_user)) -> dict[str, Any
         today_start = datetime(now.year, now.month, now.day, 0, 0, 0, tzinfo=timezone.utc)
         today_end = datetime(now.year, now.month, now.day, 23, 59, 59, tzinfo=timezone.utc)
 
-        cancelled_parents = {
-            int(row.parent_invoice_id)
-            for row in db.query(Invoice).filter(
-                Invoice.status == InvoiceStatus.CANCELLED,
-                Invoice.parent_invoice_id.is_not(None),
-            ).all()
-            if row.parent_invoice_id is not None
-        }
-        settled_map: dict[int, float] = {}
-        for s in db.query(CreditSettlement).all():
-            settled_map[s.invoice_id] = round_cur(settled_map.get(s.invoice_id, 0.0) + float(s.amount))
+        cancelled_parents = get_cancelled_parent_ids(db)
+        settlement_info_map = build_credit_settlement_info_map(db)
+        return_summary_map = build_return_summary_map(db)
 
-        # Today's completed bills (excluding bills that were cancelled via a child CANCELLED bill)
+        # Today's completed bills (excluding cancelled parents and child settlements; subtract returns)
         today_invoices_raw = (
             db.query(Invoice)
             .filter(
@@ -2782,25 +3126,45 @@ def get_dashboard_stats(user: User = Depends(get_current_user)) -> dict[str, Any
             )
             .all()
         )
-        today_invoices = [
-            inv for inv in today_invoices_raw
-            if inv.id not in cancelled_parents and (inv.payment_status or '') not in ('UDHARI_PAID', 'UDHARI_PARTIAL_PAID')
+        today_sales_invoices = [
+            inv
+            for inv in today_invoices_raw
+            if inv.id not in cancelled_parents
+            and inv.parent_invoice_id is None
+            and (inv.payment_status or '') not in ('UDHARI_PAID', 'UDHARI_PARTIAL_PAID', 'RETURN')
         ]
-        today_sales = sum(float(inv.grand_total) for inv in today_invoices)
-        today_bills_count = len(today_invoices)
+        today_return_invoices = [
+            inv
+            for inv in today_invoices_raw
+            if (inv.payment_status or '') == 'RETURN'
+            and (inv.parent_invoice_id not in cancelled_parents)
+        ]
 
-        # Payment methods breakdown for today
+        today_gross_sales = sum(float(inv.grand_total or 0.0) for inv in today_sales_invoices)
+        today_returns_total = sum(float(ret.grand_total or 0.0) for ret in today_return_invoices)
+        today_sales = round_cur(max(0.0, today_gross_sales - today_returns_total))
+        today_bills_count = len(today_sales_invoices)
+
+        # Payment methods breakdown for today (net of today's returns)
         payment_breakdown: dict[str, dict[str, Any]] = {
             'CASH': {'count': 0, 'amount': 0.0},
             'UPI': {'count': 0, 'amount': 0.0},
             'CARD': {'count': 0, 'amount': 0.0},
             'CREDIT': {'count': 0, 'amount': 0.0},
         }
-        for inv in today_invoices:
+        for inv in today_sales_invoices:
             pm = inv.payment_method.value
             if pm in payment_breakdown:
                 payment_breakdown[pm]['count'] += 1
-                payment_breakdown[pm]['amount'] = round_cur(payment_breakdown[pm]['amount'] + float(inv.grand_total))
+                payment_breakdown[pm]['amount'] = round_cur(
+                    payment_breakdown[pm]['amount'] + float(inv.grand_total or 0.0)
+                )
+        for ret in today_return_invoices:
+            pm = ret.payment_method.value
+            if pm in payment_breakdown:
+                payment_breakdown[pm]['amount'] = round_cur(
+                    max(0.0, payment_breakdown[pm]['amount'] - float(ret.grand_total or 0.0))
+                )
 
         # Products count and low stock items
         all_active_products = db.query(Product).filter(Product.is_active.is_(True)).all()
@@ -2815,6 +3179,11 @@ def get_dashboard_stats(user: User = Depends(get_current_user)) -> dict[str, Any
             .filter(
                 Invoice.payment_method == PaymentMethod.CREDIT,
                 Invoice.status == InvoiceStatus.COMPLETED,
+                Invoice.parent_invoice_id.is_(None),
+                or_(
+                    Invoice.payment_status.is_(None),
+                    ~Invoice.payment_status.in_(['RETURN', 'UDHARI_PAID', 'UDHARI_PARTIAL_PAID']),
+                ),
             )
             .all()
         )
@@ -2823,11 +3192,13 @@ def get_dashboard_stats(user: User = Depends(get_current_user)) -> dict[str, Any
         for inv in all_credit_invoices:
             if inv.id in cancelled_parents:
                 continue
-            total_amt = float(inv.grand_total)
-            paid_amt = settled_map.get(inv.id, float(inv.paid_amount or 0.0))
-            if inv.payment_status == 'PAID':
-                paid_amt = total_amt
-            bal_due = max(0.0, round_cur(total_amt - paid_amt))
+            summary = serialize_invoice_summary(
+                inv,
+                cancelled_parent_ids=cancelled_parents,
+                settlement_info_map=settlement_info_map,
+                return_summary_map=return_summary_map,
+            )
+            bal_due = float(summary['balance_due'])
             if bal_due > 0.01:
                 total_udhari_due = round_cur(total_udhari_due + bal_due)
                 inv_dt = inv.invoice_date
@@ -2837,13 +3208,7 @@ def get_dashboard_stats(user: User = Depends(get_current_user)) -> dict[str, Any
                 days_pending = int(age_seconds // 86400)
                 pending_udhari_list.append(
                     {
-                        **serialize_invoice_summary(
-                            inv,
-                            cancelled_parent_ids=cancelled_parents,
-                            settled_map=settled_map,
-                        ),
-                        'paid_amount': round_cur(paid_amt),
-                        'balance_due': bal_due,
+                        **summary,
                         'days_pending': days_pending,
                         '_age_seconds': age_seconds,
                     }
@@ -2865,7 +3230,7 @@ def get_dashboard_stats(user: User = Depends(get_current_user)) -> dict[str, Any
             .all()
         )
 
-        # 7-day sales trend
+        # 7-day sales trend (net of same-day returns)
         daily_trend = []
         for d in range(6, -1, -1):
             day_target = now - timedelta(days=d)
@@ -2880,16 +3245,30 @@ def get_dashboard_stats(user: User = Depends(get_current_user)) -> dict[str, Any
                 )
                 .all()
             )
-            valid_day_invs = [
-                i for i in day_invs
-                if i.id not in cancelled_parents and (i.payment_status or '') not in ('UDHARI_PAID', 'UDHARI_PARTIAL_PAID')
+            valid_day_sales = [
+                i
+                for i in day_invs
+                if i.id not in cancelled_parents
+                and i.parent_invoice_id is None
+                and (i.payment_status or '') not in ('UDHARI_PAID', 'UDHARI_PARTIAL_PAID', 'RETURN')
             ]
+            valid_day_returns = [
+                i
+                for i in day_invs
+                if (i.payment_status or '') == 'RETURN'
+                and (i.parent_invoice_id not in cancelled_parents)
+            ]
+            day_sales_total = max(
+                0.0,
+                sum(float(i.grand_total or 0.0) for i in valid_day_sales)
+                - sum(float(r.grand_total or 0.0) for r in valid_day_returns),
+            )
             daily_trend.append(
                 {
                     'date': day_target.strftime('%Y-%m-%d'),
                     'day_name': day_target.strftime('%a'),
-                    'sales': round_cur(sum(float(i.grand_total) for i in valid_day_invs)),
-                    'count': len(valid_day_invs),
+                    'sales': round_cur(day_sales_total),
+                    'count': len(valid_day_sales),
                 }
             )
 
@@ -2907,7 +3286,8 @@ def get_dashboard_stats(user: User = Depends(get_current_user)) -> dict[str, Any
                 serialize_invoice_summary(
                     inv,
                     cancelled_parent_ids=cancelled_parents,
-                    settled_map=settled_map,
+                    settlement_info_map=settlement_info_map,
+                    return_summary_map=return_summary_map,
                 )
                 for inv in recent_invoices
             ],
@@ -2915,6 +3295,143 @@ def get_dashboard_stats(user: User = Depends(get_current_user)) -> dict[str, Any
         }
     finally:
         db.close()
+
+
+def reconcile_legacy_accounting_data() -> None:
+    """Idempotent startup repair for historical return bills and credit balances."""
+    db: Session = SessionLocal()
+    try:
+        all_returns = (
+            db.query(Invoice)
+            .filter(
+                Invoice.parent_invoice_id.is_not(None),
+                Invoice.payment_status == 'RETURN',
+                Invoice.status == InvoiceStatus.COMPLETED,
+            )
+            .order_by(Invoice.id.asc())
+            .all()
+        )
+        returns_by_parent: dict[int, list[Invoice]] = {}
+        for r in all_returns:
+            if r.parent_invoice_id is not None:
+                returns_by_parent.setdefault(int(r.parent_invoice_id), []).append(r)
+
+        if returns_by_parent:
+            s_map = build_credit_settlement_info_map(db, list(returns_by_parent.keys()))
+            for pid, ret_list in returns_by_parent.items():
+                parent = db.query(Invoice).filter(Invoice.id == pid).first()
+                if parent is None:
+                    continue
+                p_sub = Decimal(str(parent.subtotal or 0.0))
+                p_disc = Decimal(str(parent.discount or 0.0))
+                p_grand = Decimal(str(parent.grand_total or 0.0))
+
+                if parent.payment_method == PaymentMethod.CREDIT:
+                    s_info = s_map.get(pid)
+                    p_total_cur = round_cur(p_grand)
+                    if s_info:
+                        settled_sum = float(s_info.get('total_settled', 0.0))
+                        if s_info.get('has_initial_record'):
+                            gross_paid = round_cur(min(p_total_cur, settled_sum))
+                        else:
+                            gross_paid = round_cur(min(p_total_cur, float(parent.paid_amount or 0.0) + settled_sum))
+                    else:
+                        gross_paid = round_cur(min(p_total_cur, float(parent.paid_amount or 0.0)))
+                else:
+                    gross_paid = round_cur(p_grand)
+
+                returned_so_far = 0.0
+                disc_returned_so_far = 0.0
+                refunded_so_far = 0.0
+
+                for ret in ret_list:
+                    r_sub = Decimal(str(ret.subtotal or 0.0))
+                    # Repair missing bill-discount apportionment if parent was discounted
+                    if p_disc > Decimal('0.00') and float(ret.discount or 0.0) == 0.0 and p_sub > Decimal('0.00'):
+                        cum_sub = Decimal(str(returned_so_far)) + Decimal(str(disc_returned_so_far)) + r_sub
+                        if abs(cum_sub - p_sub) <= Decimal('0.05'):
+                            new_disc = max(Decimal('0.00'), p_disc - Decimal(str(disc_returned_so_far)))
+                            new_grand = max(Decimal('0.00'), p_grand - Decimal(str(returned_so_far)))
+                        else:
+                            new_disc = (p_disc * (r_sub / p_sub)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                            new_disc = min(r_sub, new_disc, max(Decimal('0.00'), p_disc - Decimal(str(disc_returned_so_far))))
+                            new_grand = max(Decimal('0.00'), r_sub - new_disc)
+
+                        ret.discount = round_cur(new_disc)
+                        ret.grand_total = round_cur(new_grand)
+                        if new_disc > Decimal('0.00') and r_sub > Decimal('0.00'):
+                            ratio = new_grand / r_sub
+                            new_tax = (Decimal(str(ret.tax_amount or 0.0)) * ratio).quantize(
+                                Decimal('0.01'), rounding=ROUND_HALF_UP
+                            )
+                            new_taxable = max(Decimal('0.00'), new_grand - new_tax)
+                            cg = (new_tax / Decimal('2.00')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                            ret.tax_amount = round_cur(new_tax)
+                            ret.taxable_amount = round_cur(new_taxable)
+                            ret.cgst_amount = round_cur(cg)
+                            ret.sgst_amount = round_cur(new_tax - cg)
+
+                    r_grd = round_cur(float(ret.grand_total or 0.0))
+                    if parent.payment_method == PaymentMethod.CREDIT:
+                        eff_total_before = round_cur(max(0.0, float(p_grand) - returned_so_far))
+                        net_paid_before = round_cur(max(0.0, gross_paid - refunded_so_far))
+                        bal_before = round_cur(max(0.0, eff_total_before - net_paid_before))
+                        u_ded = round_cur(min(r_grd, bal_before))
+                        c_ref = round_cur(min(net_paid_before, max(0.0, r_grd - u_ded)))
+                        ret.paid_amount = c_ref
+                        ret.balance_due = 0.0
+                        if ret.notes and '| उधारी वजावट:' in ret.notes:
+                            base_note = ret.notes.split('| उधारी वजावट:', 1)[0].rstrip()
+                            ret.notes = f'{base_note} | उधारी वजावट: ₹{u_ded:.2f}, ग्राहकास परतावा: ₹{c_ref:.2f}'
+                    else:
+                        c_ref = r_grd
+                        ret.paid_amount = c_ref
+                        ret.balance_due = 0.0
+
+                    returned_so_far = round_cur(returned_so_far + r_grd)
+                    disc_returned_so_far = round_cur(disc_returned_so_far + float(ret.discount or 0.0))
+                    refunded_so_far = round_cur(refunded_so_far + c_ref)
+
+        # Flush return repairs before syncing parent credit statuses
+        db.flush()
+        cancelled_parents = get_cancelled_parent_ids(db)
+        credit_parents = (
+            db.query(Invoice)
+            .filter(
+                Invoice.payment_method == PaymentMethod.CREDIT,
+                Invoice.status == InvoiceStatus.COMPLETED,
+                Invoice.parent_invoice_id.is_(None),
+                or_(
+                    Invoice.payment_status.is_(None),
+                    ~Invoice.payment_status.in_(['RETURN', 'UDHARI_PAID', 'UDHARI_PARTIAL_PAID']),
+                ),
+            )
+            .all()
+        )
+        if credit_parents:
+            c_ids = [c.id for c in credit_parents]
+            c_s_map = build_credit_settlement_info_map(db, c_ids)
+            c_r_map = build_return_summary_map(db, c_ids)
+            for inv in credit_parents:
+                if inv.id in cancelled_parents:
+                    continue
+                acct = compute_invoice_accounting(
+                    inv,
+                    settlement_info_map=c_s_map,
+                    return_summary_map=c_r_map,
+                    cancelled_parent_ids=cancelled_parents,
+                )
+                inv.balance_due = acct['balance_due']
+                inv.payment_status = acct['payment_status']
+
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
+reconcile_legacy_accounting_data()
 
 
 @app.get('/admin/audit-logs')

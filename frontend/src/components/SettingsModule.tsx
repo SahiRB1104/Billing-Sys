@@ -250,6 +250,21 @@ export const SettingsModule: React.FC = () => {
   const [resetOtpMaskedMobile, setResetOtpMaskedMobile] = useState('')
   const [sendingResetOtp, setSendingResetOtp] = useState(false)
 
+  useEffect(() => {
+    if (!addStaffOpen && !editStaffModal && !resetPassModal) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation()
+        if (addStaffOpen) setAddStaffOpen(false)
+        if (editStaffModal) setEditStaffModal(null)
+        if (resetPassModal) setResetPassModal(null)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [addStaffOpen, editStaffModal, resetPassModal])
+
   // Auto-generate next sequential Employee ID when modal opens or role changes
   useEffect(() => {
     if (!addStaffOpen) return
@@ -519,15 +534,15 @@ export const SettingsModule: React.FC = () => {
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden">
       {/* Settings Sub-Navigation Bar */}
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-1.5 rounded-md border border-[#ECB390] bg-[#FCF8E8] p-1.5">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-1.5 rounded-md border border-theme-border/50 bg-theme-card p-1.5">
         <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => setActiveTab('store')}
             className={`flex items-center gap-1.5 rounded px-3.5 py-1.5 text-xs font-bold transition ${
               activeTab === 'store'
-                ? 'bg-[#DF7861] text-[#FCF8E8] shadow-xs'
-                : 'text-[#3D251E] hover:bg-[#ECDFC8]'
+                ? 'bg-theme-btn text-theme-btn-text shadow-xs'
+                : 'text-theme-text hover:bg-theme-surface'
             }`}
           >
             <LuStore className="h-3.5 w-3.5" />
@@ -542,8 +557,8 @@ export const SettingsModule: React.FC = () => {
             }}
             className={`flex items-center gap-1.5 rounded px-3.5 py-1.5 text-xs font-bold transition ${
               activeTab === 'staff'
-                ? 'bg-[#DF7861] text-[#FCF8E8] shadow-xs'
-                : 'text-[#3D251E] hover:bg-[#ECDFC8]'
+                ? 'bg-theme-btn text-theme-btn-text shadow-xs'
+                : 'text-theme-text hover:bg-theme-surface'
             }`}
           >
             <LuUsers className="h-3.5 w-3.5" />
@@ -551,8 +566,8 @@ export const SettingsModule: React.FC = () => {
             <span
               className={`rounded px-1.5 py-0.2 text-[10px] font-bold font-english ${
                 activeTab === 'staff'
-                  ? 'bg-[#FCF8E8] text-[#DF7861]'
-                  : 'bg-[#ECDFC8] text-[#3D251E]'
+                  ? 'bg-theme-card text-theme-btn'
+                  : 'bg-theme-surface text-theme-text'
               }`}
             >
               {staffList.length}
@@ -564,14 +579,14 @@ export const SettingsModule: React.FC = () => {
             onClick={() => setActiveTab('payment')}
             className={`flex items-center gap-1.5 rounded px-3.5 py-1.5 text-xs font-bold transition ${
               activeTab === 'payment'
-                ? 'bg-[#DF7861] text-[#FCF8E8] shadow-xs'
-                : 'text-[#3D251E] hover:bg-[#ECDFC8]'
+                ? 'bg-theme-btn text-theme-btn-text shadow-xs'
+                : 'text-theme-text hover:bg-theme-surface'
             }`}
           >
             <LuQrCode className="h-3.5 w-3.5" />
             <span>{t('settings.tabPayment')}</span>
             {paymentSettings?.upi_enabled && (
-              <span className="rounded border border-emerald-300 bg-emerald-50 px-1.5 py-0.2 text-[10px] font-bold text-emerald-800 font-english">
+              <span className="rounded border border-theme-success/30 bg-emerald-50 px-1.5 py-0.2 text-[10px] font-bold text-theme-success font-english">
                 UPI ON
               </span>
             )}
@@ -580,16 +595,16 @@ export const SettingsModule: React.FC = () => {
 
         {/* Offline SQLite 3 (WAL) Status & 1-Click Backup */}
         <div className="flex items-center gap-2">
-          <span className="hidden items-center gap-1 text-[11px] font-bold text-[#5C4338] md:inline-flex">
-            <LuDatabase className="h-3.5 w-3.5 text-[#DF7861]" />
+          <span className="hidden items-center gap-1 text-[11px] font-bold text-theme-muted md:inline-flex">
+            <LuDatabase className="h-3.5 w-3.5 text-theme-btn" />
             <span>{t('settings.dbEngineLabel')}</span>
           </span>
           <button
             type="button"
             onClick={() => void downloadDatabaseBackup()}
-            className="flex items-center gap-1.5 rounded border border-[#ECB390] bg-[#ECDFC8] px-3 py-1 text-[11px] font-bold text-[#3D251E] hover:bg-[#ECB390]"
+            className="flex items-center gap-1.5 rounded border border-theme-border/60 bg-theme-surface px-3 py-1 text-[11px] font-bold text-theme-text hover:bg-theme-header/20"
           >
-            <LuDownload className="h-3.5 w-3.5 text-[#DF7861]" />
+            <LuDownload className="h-3.5 w-3.5 text-theme-btn" />
             <span>{t('settings.backupDbBtn')}</span>
           </button>
         </div>
@@ -599,29 +614,24 @@ export const SettingsModule: React.FC = () => {
       {activeTab === 'store' && (
         <form
           onSubmit={handleSaveStore}
-          className="flex min-h-0 flex-1 flex-col justify-between overflow-hidden rounded-md border border-[#ECB390] bg-[#FCF8E8] p-4"
+          className="flex min-h-0 flex-1 flex-col justify-between overflow-hidden rounded-md border border-theme-border/50 bg-theme-card p-4"
         >
-          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#ECB390] pb-2.5">
-            <div>
-              <h3 className="text-sm font-bold uppercase tracking-wide text-[#3D251E]">
-                {t('settings.shopDetails')}
-              </h3>
-              <p className="text-[11px] text-[#7A6258]">
-                {t('settings.shopDetailsSub')}
-              </p>
-            </div>
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-theme-border/40 pb-2.5">
+            <h3 className="text-sm font-bold uppercase tracking-wide text-theme-text">
+              {t('settings.shopDetails')}
+            </h3>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={handleResetStore}
-                className="rounded border border-[#ECB390] bg-[#ECDFC8] px-3.5 py-1.5 text-xs font-bold text-[#3D251E] hover:bg-[#ECB390]"
+                className="rounded border border-theme-border/60 bg-theme-surface px-3.5 py-1.5 text-xs font-bold text-theme-text hover:bg-theme-header/20"
               >
                 {t('settings.reset')}
               </button>
               <button
                 type="submit"
                 disabled={storeSaving}
-                className="rounded bg-[#DF7861] px-5 py-1.5 text-xs font-bold text-[#FCF8E8] hover:bg-[#c9624c] disabled:opacity-60"
+                className="rounded bg-theme-btn px-5 py-1.5 text-xs font-bold text-theme-btn-text hover:bg-theme-btn-hover disabled:opacity-60"
               >
                 {storeSaving ? t('settings.saving') : t('settings.save')}
               </button>
@@ -638,7 +648,7 @@ export const SettingsModule: React.FC = () => {
                   onChangeValue={(val) =>
                     setStoreForm({ ...storeForm, store_name: val })
                   }
-                  className="w-full rounded border border-[#ECB390] bg-white px-3 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861]"
+                  className="w-full rounded border border-theme-border bg-theme-input px-3 py-1.5 text-xs font-semibold text-theme-text placeholder-theme-muted/70 outline-none focus:border-theme-btn"
                   placeholder={t('settings.shopNamePlaceholder')}
                   showLiveBadge={false}
                 />
@@ -651,13 +661,13 @@ export const SettingsModule: React.FC = () => {
                   onChangeValue={(val) =>
                     setStoreForm({ ...storeForm, owner_name: val })
                   }
-                  className="w-full rounded border border-[#ECB390] bg-white px-3 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861]"
+                  className="w-full rounded border border-theme-border bg-theme-input px-3 py-1.5 text-xs font-semibold text-theme-text placeholder-theme-muted/70 outline-none focus:border-theme-btn"
                   showLiveBadge={false}
                 />
               </div>
 
               <label className="space-y-1">
-                <span className="text-xs font-bold text-[#3D251E]">
+                <span className="text-xs font-bold text-theme-text">
                   {t('settings.phone')}
                 </span>
                 <input
@@ -671,12 +681,12 @@ export const SettingsModule: React.FC = () => {
                   }
                   maxLength={10}
                   placeholder="9876543210"
-                  className="w-full rounded border border-[#ECB390] bg-white px-3 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+                  className="w-full rounded border border-theme-border bg-theme-input px-3 py-1.5 text-xs font-semibold text-theme-text placeholder-theme-muted/70 outline-none focus:border-theme-btn font-english"
                 />
               </label>
 
               <label className="space-y-1">
-                <span className="text-xs font-bold text-[#3D251E]">
+                <span className="text-xs font-bold text-theme-text">
                   {t('settings.email')}
                 </span>
                 <input
@@ -685,7 +695,7 @@ export const SettingsModule: React.FC = () => {
                   onChange={(e) =>
                     setStoreForm({ ...storeForm, email: e.target.value })
                   }
-                  className="w-full rounded border border-[#ECB390] bg-white px-3 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+                  className="w-full rounded border border-theme-border bg-theme-input px-3 py-1.5 text-xs font-semibold text-theme-text outline-none focus:border-theme-btn font-english"
                 />
               </label>
 
@@ -696,7 +706,7 @@ export const SettingsModule: React.FC = () => {
                   onChangeValue={(val) =>
                     setStoreForm({ ...storeForm, address: val })
                   }
-                  className="w-full rounded border border-[#ECB390] bg-white px-3 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861]"
+                  className="w-full rounded border border-theme-border bg-theme-input px-3 py-1.5 text-xs font-semibold text-theme-text placeholder-theme-muted/70 outline-none focus:border-theme-btn"
                   showLiveBadge={false}
                 />
               </div>
@@ -708,7 +718,7 @@ export const SettingsModule: React.FC = () => {
                   onChangeValue={(val) =>
                     setStoreForm({ ...storeForm, city: val })
                   }
-                  className="w-full rounded border border-[#ECB390] bg-white px-3 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861]"
+                  className="w-full rounded border border-theme-border bg-theme-input px-3 py-1.5 text-xs font-semibold text-theme-text placeholder-theme-muted/70 outline-none focus:border-theme-btn"
                   showLiveBadge={false}
                 />
               </div>
@@ -720,13 +730,13 @@ export const SettingsModule: React.FC = () => {
                   onChangeValue={(val) =>
                     setStoreForm({ ...storeForm, state: val })
                   }
-                  className="w-full rounded border border-[#ECB390] bg-white px-3 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861]"
+                  className="w-full rounded border border-theme-border bg-theme-input px-3 py-1.5 text-xs font-semibold text-theme-text placeholder-theme-muted/70 outline-none focus:border-theme-btn"
                   showLiveBadge={false}
                 />
               </div>
 
               <label className="space-y-1">
-                <span className="text-xs font-bold text-[#3D251E]">
+                <span className="text-xs font-bold text-theme-text">
                   {t('settings.pinCode')}
                 </span>
                 <input
@@ -738,7 +748,7 @@ export const SettingsModule: React.FC = () => {
                     })
                   }
                   maxLength={6}
-                  className="w-full rounded border border-[#ECB390] bg-white px-3 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+                  className="w-full rounded border border-theme-border bg-theme-input px-3 py-1.5 text-xs font-semibold text-theme-text outline-none focus:border-theme-btn font-english"
                 />
               </label>
 
@@ -750,7 +760,7 @@ export const SettingsModule: React.FC = () => {
                     setStoreForm({ ...storeForm, receipt_header: val })
                   }
                   placeholder={t('settings.receiptHeaderPlaceholder')}
-                  className="w-full rounded border border-[#ECB390] bg-white px-3 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861]"
+                  className="w-full rounded border border-theme-border bg-theme-input px-3 py-1.5 text-xs font-semibold text-theme-text placeholder-theme-muted/70 outline-none focus:border-theme-btn"
                   showLiveBadge={false}
                 />
               </div>
@@ -763,15 +773,15 @@ export const SettingsModule: React.FC = () => {
                     setStoreForm({ ...storeForm, receipt_footer: val })
                   }
                   placeholder={t('settings.receiptFooterPlaceholder')}
-                  className="w-full rounded border border-[#ECB390] bg-white px-3 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861]"
+                  className="w-full rounded border border-theme-border bg-theme-input px-3 py-1.5 text-xs font-semibold text-theme-text placeholder-theme-muted/70 outline-none focus:border-theme-btn"
                   showLiveBadge={false}
                 />
               </div>
             </div>
 
             {/* GST & Tax Configuration Section */}
-            <div className="rounded-md border border-[#ECB390] bg-[#ECDFC8]/60 p-3">
-              <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-[#3D251E]">
+            <div className="rounded-md border border-theme-border/50 bg-theme-surface/40 p-3">
+              <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-theme-text">
                 {t('settings.taxConfigTitle')}
               </h4>
 
@@ -784,11 +794,11 @@ export const SettingsModule: React.FC = () => {
                     onChange={(e) =>
                       setStoreForm({ ...storeForm, gst_enabled: e.target.checked })
                     }
-                    className="h-4 w-4 rounded border-[#ECB390] accent-[#DF7861]"
+                    className="h-4 w-4 rounded border-theme-border accent-theme-btn"
                   />
                   <label
                     htmlFor="gst_toggle"
-                    className="cursor-pointer text-xs font-bold text-[#3D251E]"
+                    className="cursor-pointer text-xs font-bold text-theme-text"
                   >
                     {t('settings.gstEnable')}
                   </label>
@@ -796,7 +806,7 @@ export const SettingsModule: React.FC = () => {
 
                 {storeForm.gst_enabled && (
                   <label className="space-y-1">
-                    <span className="text-xs font-bold text-[#3D251E]">
+                    <span className="text-xs font-bold text-theme-text">
                       {t('settings.gstin')} *
                     </span>
                     <input
@@ -809,13 +819,13 @@ export const SettingsModule: React.FC = () => {
                       }
                       placeholder="27ABCDE1234F1Z5"
                       maxLength={15}
-                      className="w-full rounded border border-[#ECB390] bg-white px-3 py-1.5 text-xs font-mono font-bold uppercase text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+                      className="w-full rounded border border-theme-border bg-theme-input px-3 py-1.5 text-xs font-mono font-bold uppercase text-theme-text placeholder-theme-muted/70 outline-none focus:border-theme-btn font-english"
                     />
                   </label>
                 )}
 
                 <label className="space-y-1">
-                  <span className="text-xs font-bold text-[#3D251E]">
+                  <span className="text-xs font-bold text-theme-text">
                     {t('settings.taxPricingPolicy')}
                   </span>
                   <select
@@ -826,7 +836,7 @@ export const SettingsModule: React.FC = () => {
                         tax_inclusive: e.target.value === 'inclusive',
                       })
                     }
-                    className="w-full rounded border border-[#ECB390] bg-white px-3 py-1.5 text-xs font-bold text-[#3D251E] outline-none focus:border-[#DF7861]"
+                    className="w-full rounded border border-theme-border bg-theme-input px-3 py-1.5 text-xs font-bold text-theme-text outline-none focus:border-theme-btn"
                   >
                     <option value="inclusive">{t('settings.taxInclusive')}</option>
                     <option value="exclusive">{t('settings.taxExclusive')}</option>
@@ -835,7 +845,7 @@ export const SettingsModule: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-2">
                   <label className="space-y-1">
-                    <span className="text-xs font-bold text-[#3D251E]">
+                    <span className="text-xs font-bold text-theme-text">
                       {t('settings.invoicePrefix')}
                     </span>
                     <input
@@ -847,12 +857,12 @@ export const SettingsModule: React.FC = () => {
                         })
                       }
                       maxLength={8}
-                      className="w-full rounded border border-[#ECB390] bg-white px-2.5 py-1.5 text-xs font-bold text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+                      className="w-full rounded border border-theme-border bg-theme-input px-2.5 py-1.5 text-xs font-bold text-theme-text outline-none focus:border-theme-btn font-english"
                     />
                   </label>
 
                   <label className="space-y-1">
-                    <span className="text-xs font-bold text-[#3D251E]">
+                    <span className="text-xs font-bold text-theme-text">
                       {t('settings.currency')}
                     </span>
                     <input
@@ -863,7 +873,7 @@ export const SettingsModule: React.FC = () => {
                           currency_symbol: e.target.value,
                         })
                       }
-                      className="w-full rounded border border-[#ECB390] bg-white px-2.5 py-1.5 text-xs font-bold text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+                      className="w-full rounded border border-theme-border bg-theme-input px-2.5 py-1.5 text-xs font-bold text-theme-text outline-none focus:border-theme-btn font-english"
                     />
                   </label>
                 </div>
@@ -872,11 +882,11 @@ export const SettingsModule: React.FC = () => {
           </div>
 
           {storeForm.store_name && (
-            <div className="flex shrink-0 items-center justify-between rounded border border-[#ECB390] bg-[#ECDFC8]/70 px-3.5 py-1.5 text-xs">
-              <span className="font-bold text-[#5C4338]">
+            <div className="flex shrink-0 items-center justify-between rounded border border-theme-border/50 bg-theme-surface/60 px-3.5 py-1.5 text-xs">
+              <span className="font-bold text-theme-muted">
                 {t('settings.fontPreview')}
               </span>
-              <span className="text-sm font-black text-[#3D251E]">
+              <span className="text-sm font-black text-theme-text">
                 {localizeDynamicText(storeForm.store_name, isMarathi)}
               </span>
             </div>
@@ -886,20 +896,15 @@ export const SettingsModule: React.FC = () => {
 
       {/* ── TAB 2: STAFF & CASHIER MANAGEMENT ─────────────────────── */}
       {activeTab === 'staff' && (
-        <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-hidden rounded-md border border-[#ECB390] bg-[#FCF8E8] p-4">
-          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#ECB390] pb-2.5">
-            <div>
-              <h3 className="text-sm font-bold uppercase tracking-wide text-[#3D251E]">
-                {t('settings.staffTitle')}
-              </h3>
-              <p className="text-[11px] text-[#7A6258]">
-                {t('settings.staffSubtitle')}
-              </p>
-            </div>
+        <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-hidden rounded-md border border-theme-border/50 bg-theme-card p-4">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-theme-border/40 pb-2.5">
+            <h3 className="text-sm font-bold uppercase tracking-wide text-theme-text">
+              {t('settings.staffTitle')}
+            </h3>
             <button
               type="button"
               onClick={handleOpenAddStaff}
-              className="flex items-center gap-1.5 rounded bg-[#DF7861] px-4 py-1.5 text-xs font-bold text-[#FCF8E8] hover:bg-[#c9624c]"
+              className="flex items-center gap-1.5 rounded bg-theme-btn px-4 py-1.5 text-xs font-bold text-theme-btn-text hover:bg-theme-btn-hover"
             >
               <LuPlus className="h-4 w-4" />
               <span>{t('settings.addStaff')}</span>
@@ -911,19 +916,19 @@ export const SettingsModule: React.FC = () => {
             tabIndex={0}
             role="region"
             aria-label={t('settings.staffTitle')}
-            className="pos-scroll min-h-0 flex-1 rounded border border-[#ECB390] bg-[#FCF8E8]"
+            className="pos-scroll min-h-0 flex-1 rounded border border-theme-border/50 bg-theme-card"
           >
             {staffLoading ? (
-              <div className="flex h-full items-center justify-center py-12 text-center text-xs font-bold text-[#7A6258]">
+              <div className="flex h-full items-center justify-center py-12 text-center text-xs font-bold text-theme-muted">
                 {t('status.loading')}
               </div>
             ) : staffList.length === 0 ? (
-              <div className="flex h-full items-center justify-center py-12 text-center text-xs font-bold text-[#7A6258]">
+              <div className="flex h-full items-center justify-center py-12 text-center text-xs font-bold text-theme-muted">
                 {t('settings.noStaffFound')}
               </div>
             ) : (
               <table className="pos-table text-left text-xs">
-                <thead className="bg-[#ECB390] text-[11px] font-bold text-[#3D251E]">
+                <thead className="bg-theme-header text-[11px] font-bold text-theme-btn-text">
                   <tr>
                     <th className="px-3 py-2">{t('settings.staffId')}</th>
                     <th className="px-3 py-2">{t('settings.staffName')}</th>
@@ -935,29 +940,29 @@ export const SettingsModule: React.FC = () => {
                     <th className="px-3 py-2 text-right">{t('settings.actions')}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#ECDFC8] bg-[#FCF8E8]">
+                <tbody className="divide-y divide-theme-surface bg-theme-card">
                   {staffList.map((user) => (
-                    <tr key={user.id} className="hover:bg-[#ECDFC8]/60">
-                      <td className="px-3 py-2 font-mono text-xs font-bold text-[#3D251E] font-english">
+                    <tr key={user.id} className="hover:bg-theme-surface/40">
+                      <td className="px-3 py-2 font-mono text-xs font-bold text-theme-text font-english">
                         {user.staff_id || '—'}
                       </td>
-                      <td className="px-3 py-2 font-bold text-[#3D251E]">
+                      <td className="px-3 py-2 font-bold text-theme-text">
                         {localizeDynamicText(user.name, isMarathi)}
                         {user.must_change_password && (
-                          <span className="ml-1.5 rounded border border-[#ECB390] bg-[#ECDFC8] px-1.5 py-0.5 text-[9px] font-bold text-[#DF7861]">
+                          <span className="ml-1.5 rounded border border-theme-border/60 bg-theme-surface px-1.5 py-0.5 text-[9px] font-bold text-theme-btn">
                             OTP Pending
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2 font-mono text-xs text-[#5C4338] font-english">
+                      <td className="px-3 py-2 font-mono text-xs text-theme-muted font-english">
                         {user.username}
                       </td>
                       <td className="px-3 py-2">
                         <span
                           className={`rounded border px-2 py-0.5 text-[10px] font-bold ${
                             user.role === 'ADMIN'
-                              ? 'border-[#DF7861] bg-[#DF7861] text-[#FCF8E8]'
-                              : 'border-[#ECB390] bg-[#ECDFC8] text-[#3D251E]'
+                              ? 'border-theme-btn bg-theme-btn text-theme-btn-text'
+                              : 'border-theme-border/60 bg-theme-surface text-theme-text'
                           }`}
                         >
                           {user.role === 'ADMIN'
@@ -965,14 +970,14 @@ export const SettingsModule: React.FC = () => {
                             : t('user.roleCashier')}
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-[#3D251E] font-english">
+                      <td className="px-3 py-2 text-theme-text font-english">
                         {user.contact_number || '—'}
                       </td>
                       {/* ID Status column: Hide document_ref (Doc Number) as requested */}
                       <td className="px-3 py-2">
                         <div className="flex flex-col gap-0.5">
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#3D251E]">
-                            <LuShieldCheck className="h-3.5 w-3.5 text-emerald-700" />
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-theme-text">
+                            <LuShieldCheck className="h-3.5 w-3.5 text-theme-success" />
                             <span>
                               {user.document_type
                                 ? `${user.document_type} • ${user.document_status || 'VERIFIED'}`
@@ -980,7 +985,7 @@ export const SettingsModule: React.FC = () => {
                             </span>
                           </span>
                           {user.hard_copy_collected && (
-                            <span className="text-[10px] font-semibold text-[#5C4338]">
+                            <span className="text-[10px] font-semibold text-theme-muted">
                               Hard Copy Verified
                             </span>
                           )}
@@ -990,8 +995,8 @@ export const SettingsModule: React.FC = () => {
                         <span
                           className={`rounded border px-2 py-0.5 text-[10px] font-bold ${
                             user.is_active
-                              ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
-                              : 'border-[#DF7861] bg-[#ECB390]/40 text-[#B93829]'
+                              ? 'border-theme-success/30 bg-emerald-50 text-theme-success'
+                              : 'border-theme-danger/40 bg-red-50 text-theme-danger'
                           }`}
                         >
                           {user.is_active ? t('status.active') : t('status.inactive')}
@@ -1002,17 +1007,17 @@ export const SettingsModule: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => setEditStaffModal(user)}
-                            className="inline-flex items-center gap-1 rounded border border-[#ECB390] bg-[#ECDFC8] px-2.5 py-1 text-[11px] font-bold text-[#3D251E] hover:bg-[#ECB390] font-english"
+                            className="inline-flex items-center gap-1 rounded border border-theme-border/60 bg-theme-surface px-2.5 py-1 text-[11px] font-bold text-theme-text hover:bg-theme-header/20 font-english"
                           >
-                            <LuPencil className="h-3 w-3 text-[#DF7861]" />
+                            <LuPencil className="h-3 w-3 text-theme-btn" />
                             <span>Edit</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => handleOpenResetModal(user)}
-                            className="inline-flex items-center gap-1 rounded border border-[#ECB390] bg-[#ECDFC8] px-2.5 py-1 text-[11px] font-bold text-[#3D251E] hover:bg-[#ECB390]"
+                            className="inline-flex items-center gap-1 rounded border border-theme-border/60 bg-theme-surface px-2.5 py-1 text-[11px] font-bold text-theme-text hover:bg-theme-header/20"
                           >
-                            <LuKeyRound className="h-3 w-3 text-[#DF7861]" />
+                            <LuKeyRound className="h-3 w-3 text-theme-btn" />
                             <span>{t('settings.resetPassword')}</span>
                           </button>
                           <button
@@ -1020,8 +1025,8 @@ export const SettingsModule: React.FC = () => {
                             onClick={() => toggleStaffStatus(user.id)}
                             className={`rounded px-2.5 py-1 text-[11px] font-bold ${
                               user.is_active
-                                ? 'border border-[#DF7861]/60 bg-[#ECB390]/35 text-[#B93829] hover:bg-[#ECB390]/70'
-                                : 'border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                                ? 'border border-theme-danger/40 bg-red-50 text-theme-danger hover:bg-red-100'
+                                : 'border border-theme-success/30 bg-emerald-50 text-theme-success hover:bg-emerald-100'
                             }`}
                           >
                             {user.is_active
@@ -1039,21 +1044,21 @@ export const SettingsModule: React.FC = () => {
 
           {/* Add Staff Modal (<1MB Upload, Inline View Document, Plain-Text Auto Password, AUTO Badge Kept) */}
           {addStaffOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#3D251E]/60 p-4 backdrop-blur-xs">
-              <div className="flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-md border-2 border-[#ECB390] bg-[#FCF8E8] p-5 shadow-2xl">
-                <div className="flex shrink-0 items-center justify-between border-b border-[#ECB390] pb-2.5">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-theme-text/60 p-4 backdrop-blur-xs">
+              <div className="flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-md border-2 border-theme-border bg-theme-card p-5 shadow-2xl">
+                <div className="flex shrink-0 items-center justify-between border-b border-theme-border/40 pb-2.5">
                   <div>
-                    <h3 className="text-sm font-bold uppercase tracking-wide text-[#3D251E]">
+                    <h3 className="text-sm font-bold uppercase tracking-wide text-theme-text">
                       {t('settings.addStaff')}
                     </h3>
-                    <p className="text-[11px] text-[#7A6258]">
+                    <p className="text-[11px] text-theme-muted">
                       {t('settings.mandatoryNotice')}
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setAddStaffOpen(false)}
-                    className="rounded border border-[#ECB390] bg-[#ECDFC8] px-2 py-0.5 text-xs font-bold text-[#3D251E] hover:bg-[#ECB390]"
+                    className="rounded border border-theme-border/60 bg-theme-surface px-2 py-0.5 text-xs font-bold text-theme-text hover:bg-theme-header/20"
                   >
                     <LuX className="h-3.5 w-3.5" />
                   </button>
@@ -1075,14 +1080,14 @@ export const SettingsModule: React.FC = () => {
                         placeholder={
                           isMarathi ? 'उदा. साहिल भालेकर' : 'e.g. Sahil Bhalekar'
                         }
-                        className="w-full rounded border border-[#ECB390] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861]"
+                        className="w-full rounded border border-theme-border bg-theme-input px-2.5 py-1.5 text-xs font-semibold text-theme-text placeholder-theme-muted/70 outline-none focus:border-theme-btn"
                         showLiveBadge={false}
                       />
                     </div>
 
                     {/* Login Username (autoComplete="off" prevents browser autofilling "admin") */}
                     <label className="space-y-1">
-                      <span className="text-xs font-bold text-[#3D251E]">
+                      <span className="text-xs font-bold text-theme-text">
                         {t('settings.staffUsername')} *
                       </span>
                       <input
@@ -1098,13 +1103,13 @@ export const SettingsModule: React.FC = () => {
                           })
                         }}
                         placeholder="e.g. cashier_sahil"
-                        className="w-full rounded border border-[#ECB390] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+                        className="w-full rounded border border-theme-border bg-theme-input px-2.5 py-1.5 text-xs font-semibold text-theme-text placeholder-theme-muted/70 outline-none focus:border-theme-btn font-english"
                       />
                     </label>
 
                     {/* Role */}
                     <label className="space-y-1">
-                      <span className="text-xs font-bold text-[#3D251E]">
+                      <span className="text-xs font-bold text-theme-text">
                         {t('settings.staffRole')} *
                       </span>
                       <select
@@ -1113,7 +1118,7 @@ export const SettingsModule: React.FC = () => {
                         onChange={(e) =>
                           setStaffForm({ ...staffForm, role: e.target.value })
                         }
-                        className="w-full rounded border border-[#ECB390] bg-white px-2.5 py-1.5 text-xs font-bold text-[#3D251E] outline-none focus:border-[#DF7861]"
+                        className="w-full rounded border border-theme-border bg-theme-input px-2.5 py-1.5 text-xs font-bold text-theme-text outline-none focus:border-theme-btn"
                       >
                         <option value="CASHIER">
                           {t('settings.roleCashierOption')}
@@ -1127,16 +1132,16 @@ export const SettingsModule: React.FC = () => {
                     {/* Mobile Number (Strict 10-digit Indian Validation + Helper Badge only in creation form) */}
                     <label className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-[#3D251E]">
+                        <span className="text-xs font-bold text-theme-text">
                           {t('settings.staffPhone')} *
                         </span>
                         <span
                           className={`text-[10px] font-bold font-english ${
                             staffForm.contact_number
                               ? mobileCheck.valid
-                                ? 'text-emerald-700'
-                                : 'text-[#B93829]'
-                              : 'text-[#7A6258]'
+                                ? 'text-theme-success'
+                                : 'text-theme-danger'
+                              : 'text-theme-muted'
                           }`}
                         >
                           {staffForm.contact_number
@@ -1153,17 +1158,17 @@ export const SettingsModule: React.FC = () => {
                         value={staffForm.contact_number}
                         onChange={(e) => handleStaffMobileChange(e.target.value)}
                         placeholder="9876543210"
-                        className="w-full rounded border border-[#ECB390] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+                        className="w-full rounded border border-theme-border bg-theme-input px-2.5 py-1.5 text-xs font-semibold text-theme-text placeholder-theme-muted/70 outline-none focus:border-theme-btn font-english"
                       />
                     </label>
 
                     {/* Auto-Generated Employee ID (Keep AUTO Badge inside Add Staff Modal) */}
                     <label className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-[#3D251E]">
+                        <span className="text-xs font-bold text-theme-text">
                           {t('settings.staffId')} *
                         </span>
-                        <span className="rounded bg-[#DF7861] px-1.5 py-0.2 text-[10px] font-bold text-[#FCF8E8] font-english">
+                        <span className="rounded bg-theme-btn px-1.5 py-0.2 text-[10px] font-bold text-theme-btn-text font-english">
                           AUTO
                         </span>
                       </div>
@@ -1171,13 +1176,13 @@ export const SettingsModule: React.FC = () => {
                         required
                         readOnly
                         value={staffForm.staff_id}
-                        className="w-full cursor-not-allowed rounded border border-[#ECB390] bg-[#ECDFC8]/70 px-2.5 py-1.5 font-mono text-xs font-bold text-[#3D251E] font-english"
+                        className="w-full cursor-not-allowed rounded border border-theme-border/60 bg-theme-surface/80 px-2.5 py-1.5 font-mono text-xs font-bold text-theme-text font-english"
                       />
                     </label>
 
                     {/* Joining Date */}
                     <label className="space-y-1">
-                      <span className="text-xs font-bold text-[#3D251E]">
+                      <span className="text-xs font-bold text-theme-text">
                         {t('settings.joiningDate')} *
                       </span>
                       <input
@@ -1190,13 +1195,13 @@ export const SettingsModule: React.FC = () => {
                             joining_date: e.target.value,
                           })
                         }
-                        className="w-full rounded border border-[#ECB390] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+                        className="w-full rounded border border-theme-border bg-theme-input px-2.5 py-1.5 text-xs font-semibold text-theme-text outline-none focus:border-theme-btn font-english"
                       />
                     </label>
 
                     {/* Identity Card Type */}
                     <label className="space-y-1">
-                      <span className="text-xs font-bold text-[#3D251E]">
+                      <span className="text-xs font-bold text-theme-text">
                         {t('settings.docType')} *
                       </span>
                       <select
@@ -1213,7 +1218,7 @@ export const SettingsModule: React.FC = () => {
                             ),
                           })
                         }}
-                        className="w-full rounded border border-[#ECB390] bg-white px-2.5 py-1.5 text-xs font-bold text-[#3D251E] outline-none focus:border-[#DF7861]"
+                        className="w-full rounded border border-theme-border bg-theme-input px-2.5 py-1.5 text-xs font-bold text-theme-text outline-none focus:border-theme-btn"
                       >
                         <option value="Aadhar">{t('settings.docAadhar')}</option>
                         <option value="PAN">{t('settings.docPan')}</option>
@@ -1227,13 +1232,13 @@ export const SettingsModule: React.FC = () => {
                     {/* Identity Card Number (Strict Indian Gov Format & Clamping) */}
                     <label className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-[#3D251E]">
+                        <span className="text-xs font-bold text-theme-text">
                           {t('settings.docRef')} *
                         </span>
                         {staffForm.document_ref && (
                           <span
                             className={`text-[10px] font-bold ${
-                              docCheck.valid ? 'text-emerald-700' : 'text-[#B93829]'
+                              docCheck.valid ? 'text-theme-success' : 'text-theme-danger'
                             }`}
                           >
                             {docCheck.valid ? 'Valid Gov ID' : docCheck.error}
@@ -1255,23 +1260,23 @@ export const SettingsModule: React.FC = () => {
                         placeholder={getIdentityDocumentPlaceholder(
                           staffForm.document_type,
                         )}
-                        className="w-full rounded border border-[#ECB390] bg-white px-2.5 py-1.5 font-mono text-xs font-bold text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+                        className="w-full rounded border border-theme-border bg-theme-input px-2.5 py-1.5 font-mono text-xs font-bold text-theme-text placeholder-theme-muted/70 outline-none focus:border-theme-btn font-english"
                       />
                     </label>
                   </div>
 
                   {/* Inline Identity Card Upload (<1MB PDF/Image) + View Document Preview + Hard Copy Checkbox */}
-                  <div className="rounded-md border border-[#ECB390] bg-[#ECDFC8]/60 p-3">
+                  <div className="rounded-md border border-theme-border/50 bg-theme-surface/40 p-3">
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                       <div>
-                        <label className="block text-xs font-bold text-[#3D251E]">
+                        <label className="block text-xs font-bold text-theme-text">
                           {t('settings.uploadIdCardLabel')}
                         </label>
-                        <p className="mt-0.5 text-[10px] text-[#5C4338]">
+                        <p className="mt-0.5 text-[10px] text-theme-muted">
                           {t('settings.uploadDocHint')}
                         </p>
                         <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded bg-[#DF7861] px-3 py-1.5 text-xs font-bold text-[#FCF8E8] hover:bg-[#c9624c]">
+                          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded bg-theme-btn px-3 py-1.5 text-xs font-bold text-theme-btn-text hover:bg-theme-btn-hover">
                             <LuUpload className="h-3.5 w-3.5" />
                             <span>
                               {inlineDocFile ? 'Change File' : 'Select PDF / Image'}
@@ -1285,37 +1290,37 @@ export const SettingsModule: React.FC = () => {
                           </label>
                           {inlineDocFile ? (
                             <>
-                              <span className="max-w-[160px] truncate text-[11px] font-bold text-emerald-800 font-english">
+                              <span className="max-w-[160px] truncate text-[11px] font-bold text-theme-success font-english">
                                 {inlineDocFile.original_name} (
                                 {(inlineDocFile.size_bytes / 1024).toFixed(0)} KB)
                               </span>
                               <button
                                 type="button"
                                 onClick={() => setPreviewDocOpen((prev) => !prev)}
-                                className="inline-flex items-center gap-1 rounded border border-[#ECB390] bg-[#FCF8E8] px-2.5 py-1 text-[11px] font-bold text-[#3D251E] hover:bg-[#ECB390]"
+                                className="inline-flex items-center gap-1 rounded border border-theme-border/60 bg-theme-card px-2.5 py-1 text-[11px] font-bold text-theme-text hover:bg-theme-surface"
                               >
                                 {previewDocOpen ? (
                                   <>
-                                    <LuEyeOff className="h-3.5 w-3.5 text-[#DF7861]" />
+                                    <LuEyeOff className="h-3.5 w-3.5 text-theme-btn" />
                                     <span>{t('settings.hideUploadedDoc')}</span>
                                   </>
                                 ) : (
                                   <>
-                                    <LuEye className="h-3.5 w-3.5 text-[#DF7861]" />
+                                    <LuEye className="h-3.5 w-3.5 text-theme-btn" />
                                     <span>{t('settings.viewUploadedDoc')}</span>
                                   </>
                                 )}
                               </button>
                             </>
                           ) : (
-                            <span className="text-[11px] font-bold text-[#B93829]">
+                            <span className="text-[11px] font-bold text-theme-danger">
                               Required (&lt; 1 MB) *
                             </span>
                           )}
                         </div>
                       </div>
 
-                      <div className="flex flex-col justify-center rounded border border-[#ECB390] bg-[#FCF8E8] p-2.5">
+                      <div className="flex flex-col justify-center rounded border border-theme-border/50 bg-theme-card p-2.5">
                         <label className="flex cursor-pointer items-start gap-2.5">
                           <input
                             type="checkbox"
@@ -1327,13 +1332,13 @@ export const SettingsModule: React.FC = () => {
                                 hard_copy_collected: e.target.checked,
                               })
                             }
-                            className="mt-0.5 h-4 w-4 rounded border-[#ECB390] accent-[#DF7861]"
+                            className="mt-0.5 h-4 w-4 rounded border-theme-border accent-theme-btn"
                           />
                           <div>
-                            <div className="text-xs font-bold text-[#3D251E]">
+                            <div className="text-xs font-bold text-theme-text">
                               {t('settings.hardCopyCollected')} *
                             </div>
-                            <div className="text-[10px] text-[#5C4338]">
+                            <div className="text-[10px] text-theme-muted">
                               Signed physical photocopy of {staffForm.document_type}{' '}
                               collected in store file.
                             </div>
@@ -1344,13 +1349,13 @@ export const SettingsModule: React.FC = () => {
 
                     {/* Inline Uploaded Document Preview Box */}
                     {inlineDocFile && previewDocOpen && (
-                      <div className="mt-3 rounded border border-[#ECB390] bg-[#FCF8E8] p-2.5">
-                        <div className="mb-1.5 flex items-center justify-between text-[11px] font-bold text-[#3D251E]">
+                      <div className="mt-3 rounded border border-theme-border/50 bg-theme-card p-2.5">
+                        <div className="mb-1.5 flex items-center justify-between text-[11px] font-bold text-theme-text">
                           <span>{inlineDocFile.original_name}</span>
                           <button
                             type="button"
                             onClick={() => setPreviewDocOpen(false)}
-                            className="text-xs font-bold text-[#7A6258] hover:text-[#3D251E]"
+                            className="text-xs font-bold text-theme-muted hover:text-theme-text"
                           >
                             <LuX className="h-3.5 w-3.5" />
                           </button>
@@ -1359,13 +1364,13 @@ export const SettingsModule: React.FC = () => {
                           <iframe
                             src={inlineDocFile.document_data}
                             title="Uploaded ID PDF Preview"
-                            className="h-48 w-full rounded border border-[#ECB390] bg-white"
+                            className="h-48 w-full rounded border border-theme-border/50 bg-white"
                           />
                         ) : (
                           <img
                             src={inlineDocFile.document_data}
                             alt="Uploaded ID Card Preview"
-                            className="max-h-48 w-full rounded border border-[#ECB390] bg-white object-contain p-1"
+                            className="max-h-48 w-full rounded border border-theme-border/50 bg-white object-contain p-1"
                           />
                         )}
                       </div>
@@ -1373,13 +1378,13 @@ export const SettingsModule: React.FC = () => {
                   </div>
 
                   {/* Single Auto-Generated Plain-Text Initial Password (No Confirm Password needed) */}
-                  <div className="rounded-md border border-[#ECB390] bg-[#ECDFC8]/40 p-3">
+                  <div className="rounded-md border border-theme-border/50 bg-theme-surface/40 p-3">
                     <label className="block space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-[#3D251E]">
+                        <span className="text-xs font-bold text-theme-text">
                           {t('settings.password')} *
                         </span>
-                        <span className="rounded bg-[#ECDFC8] px-2 py-0.5 text-[10px] font-bold text-[#5C4338]">
+                        <span className="rounded bg-theme-surface px-2 py-0.5 text-[10px] font-bold text-theme-muted">
                           {t('settings.autoPasswordHint')}
                         </span>
                       </div>
@@ -1394,22 +1399,25 @@ export const SettingsModule: React.FC = () => {
                           setStaffForm({ ...staffForm, password: e.target.value })
                         }}
                         placeholder="e.g. sahil9876"
-                        className="w-full rounded border border-[#ECB390] bg-white px-2.5 py-1.5 font-mono text-xs font-bold text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+                        className="w-full rounded border border-theme-border bg-theme-input px-2.5 py-1.5 font-mono text-xs font-bold text-theme-text placeholder-theme-muted/70 outline-none focus:border-theme-btn font-english"
                       />
                     </label>
                   </div>
 
-                  <div className="flex justify-end gap-2 border-t border-[#ECB390] pt-3">
+                  <div className="flex justify-end gap-2 border-t border-theme-border/40 pt-3">
                     <button
                       type="button"
                       onClick={() => setAddStaffOpen(false)}
-                      className="rounded border border-[#ECB390] bg-[#ECDFC8] px-4 py-1.5 text-xs font-bold text-[#3D251E] hover:bg-[#ECB390]"
+                      className="flex items-center gap-1.5 rounded border border-theme-border/60 bg-theme-surface px-4 py-1.5 text-xs font-bold text-theme-text hover:bg-theme-header/20 focus:outline-none focus:ring-2 focus:ring-theme-btn"
                     >
-                      {t('settings.cancel')}
+                      <span>{t('settings.cancel')}</span>
+                      <kbd className="rounded border border-theme-border/80 bg-theme-card px-1.5 py-0.5 text-[10px] font-mono font-bold text-theme-muted shadow-xs">
+                        Esc
+                      </kbd>
                     </button>
                     <button
                       type="submit"
-                      className="rounded bg-[#DF7861] px-5 py-1.5 text-xs font-bold text-[#FCF8E8] hover:bg-[#c9624c]"
+                      className="rounded bg-theme-btn px-5 py-1.5 text-xs font-bold text-theme-btn-text hover:bg-theme-btn-hover"
                     >
                       {t('settings.addStaff')}
                     </button>
@@ -1421,16 +1429,16 @@ export const SettingsModule: React.FC = () => {
 
           {/* Edit Staff Modal */}
           {editStaffModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#3D251E]/60 p-4 backdrop-blur-xs">
-              <div className="w-full max-w-md rounded-md border-2 border-[#ECB390] bg-[#FCF8E8] p-5 shadow-2xl">
-                <div className="flex items-center justify-between border-b border-[#ECB390] pb-2.5">
-                  <h3 className="text-sm font-bold uppercase text-[#3D251E]">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-theme-text/60 p-4 backdrop-blur-xs">
+              <div className="w-full max-w-md rounded-md border-2 border-theme-border bg-theme-card p-5 shadow-2xl">
+                <div className="flex items-center justify-between border-b border-theme-border/40 pb-2.5">
+                  <h3 className="text-sm font-bold uppercase text-theme-text">
                     {t('settings.editStaffTitle')} ({editStaffModal.staff_id})
                   </h3>
                   <button
                     type="button"
                     onClick={() => setEditStaffModal(null)}
-                    className="rounded border border-[#ECB390] bg-[#ECDFC8] px-2 py-0.5 text-xs font-bold text-[#3D251E]"
+                    className="rounded border border-theme-border/60 bg-theme-surface px-2 py-0.5 text-xs font-bold text-theme-text hover:bg-theme-header/20"
                   >
                     <LuX className="h-3.5 w-3.5" />
                   </button>
@@ -1447,12 +1455,12 @@ export const SettingsModule: React.FC = () => {
                           name: val,
                         })
                       }
-                      className="w-full rounded border border-[#ECB390] bg-white p-2 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861]"
+                      className="w-full rounded border border-theme-border bg-theme-input p-2 text-xs font-semibold text-theme-text outline-none focus:border-theme-btn"
                       showLiveBadge={false}
                     />
                   </div>
                   <label className="block space-y-1">
-                    <span className="text-xs font-bold text-[#3D251E]">
+                    <span className="text-xs font-bold text-theme-text">
                       {t('settings.staffPhone')} *
                     </span>
                     <input
@@ -1466,11 +1474,11 @@ export const SettingsModule: React.FC = () => {
                           contact_number: formatIndianMobile(e.target.value),
                         })
                       }
-                      className="w-full rounded border border-[#ECB390] bg-white p-2 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+                      className="w-full rounded border border-theme-border bg-theme-input p-2 text-xs font-semibold text-theme-text outline-none focus:border-theme-btn font-english"
                     />
                   </label>
                   <label className="block space-y-1">
-                    <span className="text-xs font-bold text-[#3D251E]">
+                    <span className="text-xs font-bold text-theme-text">
                       {t('settings.docRef')} ({editStaffModal.document_type || 'ID'})
                     </span>
                     <input
@@ -1484,7 +1492,7 @@ export const SettingsModule: React.FC = () => {
                           ),
                         })
                       }
-                      className="w-full rounded border border-[#ECB390] bg-white p-2 font-mono text-xs font-bold text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+                      className="w-full rounded border border-theme-border bg-theme-input p-2 font-mono text-xs font-bold text-theme-text outline-none focus:border-theme-btn font-english"
                     />
                   </label>
                   <label className="flex items-center gap-2 pt-1">
@@ -1497,23 +1505,26 @@ export const SettingsModule: React.FC = () => {
                           hard_copy_collected: e.target.checked,
                         })
                       }
-                      className="h-4 w-4 rounded border-[#ECB390] accent-[#DF7861]"
+                      className="h-4 w-4 rounded border-theme-border accent-theme-btn"
                     />
-                    <span className="text-xs font-bold text-[#3D251E]">
+                    <span className="text-xs font-bold text-theme-text">
                       {t('settings.hardCopyCollected')}
                     </span>
                   </label>
-                  <div className="flex justify-end gap-2 border-t border-[#ECB390] pt-3">
+                  <div className="flex justify-end gap-2 border-t border-theme-border/40 pt-3">
                     <button
                       type="button"
                       onClick={() => setEditStaffModal(null)}
-                      className="rounded border border-[#ECB390] bg-[#ECDFC8] px-4 py-1.5 text-xs font-bold text-[#3D251E]"
+                      className="flex items-center gap-1.5 rounded border border-theme-border/60 bg-theme-surface px-4 py-1.5 text-xs font-bold text-theme-text hover:bg-theme-header/20 focus:outline-none focus:ring-2 focus:ring-theme-btn"
                     >
-                      {t('settings.cancel')}
+                      <span>{t('settings.cancel')}</span>
+                      <kbd className="rounded border border-theme-border/80 bg-theme-card px-1.5 py-0.5 text-[10px] font-mono font-bold text-theme-muted shadow-xs">
+                        Esc
+                      </kbd>
                     </button>
                     <button
                       type="submit"
-                      className="rounded bg-[#DF7861] px-5 py-1.5 text-xs font-bold text-[#FCF8E8] hover:bg-[#c9624c]"
+                      className="rounded bg-theme-btn px-5 py-1.5 text-xs font-bold text-theme-btn-text hover:bg-theme-btn-hover"
                     >
                       {t('settings.save')}
                     </button>
@@ -1525,22 +1536,22 @@ export const SettingsModule: React.FC = () => {
 
           {/* Admin Reset Cashier Password Modal (Requires Cashier Mobile OTP) */}
           {resetPassModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#3D251E]/60 p-4 backdrop-blur-xs">
-              <div className="w-full max-w-md rounded-md border-2 border-[#ECB390] bg-[#FCF8E8] p-5 shadow-2xl">
-                <div className="flex items-center justify-between border-b border-[#ECB390] pb-2.5">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-theme-text/60 p-4 backdrop-blur-xs">
+              <div className="w-full max-w-md rounded-md border-2 border-theme-border bg-theme-card p-5 shadow-2xl">
+                <div className="flex items-center justify-between border-b border-theme-border/40 pb-2.5">
                   <div>
-                    <h3 className="text-sm font-bold text-[#3D251E]">
+                    <h3 className="text-sm font-bold text-theme-text">
                       {t('settings.resetPassword')}:{' '}
                       {localizeDynamicText(resetPassModal.name, isMarathi)}
                     </h3>
-                    <p className="text-[11px] text-[#7A6258]">
+                    <p className="text-[11px] text-theme-muted">
                       {t('settings.otpResetNotice')}
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setResetPassModal(null)}
-                    className="rounded border border-[#ECB390] bg-[#ECDFC8] px-2 py-0.5 text-xs font-bold text-[#3D251E]"
+                    className="rounded border border-theme-border/60 bg-theme-surface px-2 py-0.5 text-xs font-bold text-theme-text hover:bg-theme-header/20"
                   >
                     <LuX className="h-3.5 w-3.5" />
                   </button>
@@ -1548,13 +1559,13 @@ export const SettingsModule: React.FC = () => {
 
                 <form onSubmit={handleResetPasswordSubmit} className="mt-3 space-y-3">
                   {/* Step 1: Send Mobile OTP to Cashier's Registered 10-digit Mobile */}
-                  <div className="rounded border border-[#ECB390] bg-[#ECDFC8]/60 p-3">
+                  <div className="rounded border border-theme-border/50 bg-theme-surface/50 p-3">
                     <div className="flex items-center justify-between gap-2">
                       <div>
-                        <div className="text-[10px] font-bold uppercase text-[#5C4338]">
+                        <div className="text-[10px] font-bold uppercase text-theme-muted">
                           {t('settings.staffPhone')}
                         </div>
-                        <div className="text-xs font-black text-[#3D251E] font-english">
+                        <div className="text-xs font-black text-theme-text font-english">
                           {resetPassModal.contact_number || 'Not Set'}
                         </div>
                       </div>
@@ -1562,7 +1573,7 @@ export const SettingsModule: React.FC = () => {
                         type="button"
                         disabled={sendingResetOtp || !resetPassModal.contact_number}
                         onClick={() => void handleSendResetOtp()}
-                        className="inline-flex items-center gap-1.5 rounded bg-[#DF7861] px-3 py-1.5 text-xs font-bold text-[#FCF8E8] hover:bg-[#c9624c] disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 rounded bg-theme-btn px-3 py-1.5 text-xs font-bold text-theme-btn-text hover:bg-theme-btn-hover disabled:opacity-50"
                       >
                         <LuSmartphone className="h-3.5 w-3.5" />
                         <span>{t('settings.sendResetOtpBtn')}</span>
@@ -1570,11 +1581,11 @@ export const SettingsModule: React.FC = () => {
                     </div>
 
                     {resetOtpPreview && (
-                      <div className="mt-2 flex items-center justify-between rounded border border-[#DF7861] bg-[#FCF8E8] px-2.5 py-1.5 text-xs">
-                        <span className="font-bold text-[#5C4338]">
+                      <div className="mt-2 flex items-center justify-between rounded border border-theme-btn bg-theme-card px-2.5 py-1.5 text-xs">
+                        <span className="font-bold text-theme-muted">
                           Offline Terminal OTP ({resetOtpMaskedMobile}):
                         </span>
-                        <span className="font-mono text-sm font-black tracking-widest text-[#DF7861] font-english">
+                        <span className="font-mono text-sm font-black tracking-widest text-theme-btn font-english">
                           {resetOtpPreview}
                         </span>
                       </div>
@@ -1583,7 +1594,7 @@ export const SettingsModule: React.FC = () => {
 
                   {/* Step 2: Enter 6-Digit OTP */}
                   <label className="block space-y-1">
-                    <span className="text-xs font-bold text-[#3D251E]">
+                    <span className="text-xs font-bold text-theme-text">
                       {t('settings.enterResetOtpLabel')} *
                     </span>
                     <input
@@ -1596,13 +1607,13 @@ export const SettingsModule: React.FC = () => {
                         setResetOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))
                       }
                       placeholder="6-digit OTP"
-                      className="w-full rounded border border-[#ECB390] bg-white p-2 font-mono text-xs font-bold tracking-widest text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+                      className="w-full rounded border border-theme-border bg-theme-input p-2 font-mono text-xs font-bold tracking-widest text-theme-text placeholder-theme-muted/70 outline-none focus:border-theme-btn font-english"
                     />
                   </label>
 
                   {/* Step 3: New Password (shown in plain text) */}
                   <label className="block space-y-1">
-                    <span className="text-xs font-bold text-[#3D251E]">
+                    <span className="text-xs font-bold text-theme-text">
                       {t('settings.newPasswordLabel')} *
                     </span>
                     <input
@@ -1610,21 +1621,24 @@ export const SettingsModule: React.FC = () => {
                       required
                       value={newPasswordVal}
                       onChange={(e) => setNewPasswordVal(e.target.value)}
-                      className="w-full rounded border border-[#ECB390] bg-white p-2 font-mono text-xs font-bold text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+                      className="w-full rounded border border-theme-border bg-theme-input p-2 font-mono text-xs font-bold text-theme-text outline-none focus:border-theme-btn font-english"
                     />
                   </label>
 
-                  <div className="flex justify-end gap-2 border-t border-[#ECB390] pt-3">
+                  <div className="flex justify-end gap-2 border-t border-theme-border/40 pt-3">
                     <button
                       type="button"
                       onClick={() => setResetPassModal(null)}
-                      className="rounded border border-[#ECB390] bg-[#ECDFC8] px-4 py-1.5 text-xs font-bold text-[#3D251E]"
+                      className="flex items-center gap-1.5 rounded border border-theme-border/60 bg-theme-surface px-4 py-1.5 text-xs font-bold text-theme-text hover:bg-theme-header/20 focus:outline-none focus:ring-2 focus:ring-theme-btn"
                     >
-                      {t('settings.cancel')}
+                      <span>{t('settings.cancel')}</span>
+                      <kbd className="rounded border border-theme-border/80 bg-theme-card px-1.5 py-0.5 text-[10px] font-mono font-bold text-theme-muted shadow-xs">
+                        Esc
+                      </kbd>
                     </button>
                     <button
                       type="submit"
-                      className="inline-flex items-center gap-1.5 rounded bg-[#DF7861] px-4 py-1.5 text-xs font-bold text-[#FCF8E8] hover:bg-[#c9624c]"
+                      className="inline-flex items-center gap-1.5 rounded bg-theme-btn px-4 py-1.5 text-xs font-bold text-theme-btn-text hover:bg-theme-btn-hover"
                     >
                       <LuCheck className="h-3.5 w-3.5" />
                       <span>{t('settings.updatePasswordBtn')}</span>
@@ -1641,21 +1655,16 @@ export const SettingsModule: React.FC = () => {
       {activeTab === 'payment' && (
         <form
           onSubmit={handleSavePayment}
-          className="flex min-h-0 flex-1 flex-col justify-between overflow-hidden rounded-md border border-[#ECB390] bg-[#FCF8E8] p-4"
+          className="flex min-h-0 flex-1 flex-col justify-between overflow-hidden rounded-md border border-theme-border/50 bg-theme-card p-4"
         >
-          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#ECB390] pb-2.5">
-            <div>
-              <h3 className="text-sm font-bold uppercase tracking-wide text-[#3D251E]">
-                {t('settings.paymentTitle')}
-              </h3>
-              <p className="text-[11px] text-[#7A6258]">
-                {t('settings.paymentSubtitle')}
-              </p>
-            </div>
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-theme-border/40 pb-2.5">
+            <h3 className="text-sm font-bold uppercase tracking-wide text-theme-text">
+              {t('settings.paymentTitle')}
+            </h3>
             <button
               type="submit"
               disabled={paymentSaving}
-              className="rounded bg-[#DF7861] px-5 py-1.5 text-xs font-bold text-[#FCF8E8] hover:bg-[#c9624c] disabled:opacity-60"
+              className="rounded bg-theme-btn px-5 py-1.5 text-xs font-bold text-theme-btn-text hover:bg-theme-btn-hover disabled:opacity-60"
             >
               {paymentSaving ? t('settings.saving') : t('settings.save')}
             </button>
@@ -1663,7 +1672,7 @@ export const SettingsModule: React.FC = () => {
 
           <div className="my-2.5 grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden lg:grid-cols-2">
             <div className="pos-scroll space-y-3 pr-1">
-              <div className="flex items-center gap-2.5 rounded border border-[#ECB390] bg-[#ECDFC8]/60 p-3">
+              <div className="flex items-center gap-2.5 rounded border border-theme-border/50 bg-theme-surface/40 p-3">
                 <input
                   type="checkbox"
                   id="upi_toggle"
@@ -1674,18 +1683,18 @@ export const SettingsModule: React.FC = () => {
                       upi_enabled: e.target.checked,
                     })
                   }
-                  className="h-4 w-4 rounded border-[#ECB390] accent-[#DF7861]"
+                  className="h-4 w-4 rounded border-theme-border accent-theme-btn"
                 />
                 <label
                   htmlFor="upi_toggle"
-                  className="cursor-pointer text-xs font-bold text-[#3D251E]"
+                  className="cursor-pointer text-xs font-bold text-theme-text"
                 >
                   {t('settings.upiEnabled')}
                 </label>
               </div>
 
               <label className="block space-y-1">
-                <span className="text-xs font-bold text-[#3D251E]">
+                <span className="text-xs font-bold text-theme-text">
                   {t('settings.payeeName')}
                 </span>
                 <input
@@ -1699,12 +1708,12 @@ export const SettingsModule: React.FC = () => {
                     })
                   }
                   placeholder={t('app.shopPoint')}
-                  className="w-full rounded border border-[#ECB390] bg-white px-3 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861]"
+                  className="w-full rounded border border-theme-border bg-theme-input px-3 py-1.5 text-xs font-semibold text-theme-text placeholder-theme-muted/70 outline-none focus:border-theme-btn"
                 />
               </label>
 
               <label className="block space-y-1">
-                <span className="text-xs font-bold text-[#3D251E]">
+                <span className="text-xs font-bold text-theme-text">
                   {t('settings.upiId')}
                 </span>
                 <input
@@ -1716,12 +1725,12 @@ export const SettingsModule: React.FC = () => {
                     })
                   }
                   placeholder="vaibhavstore@okhdfcbank"
-                  className="w-full rounded border border-[#ECB390] bg-white px-3 py-1.5 text-xs font-mono font-bold text-[#3D251E] outline-none focus:border-[#DF7861] font-english"
+                  className="w-full rounded border border-theme-border bg-theme-input px-3 py-1.5 text-xs font-mono font-bold text-theme-text placeholder-theme-muted/70 outline-none focus:border-theme-btn font-english"
                 />
               </label>
 
               <label className="block space-y-1">
-                <span className="text-xs font-bold text-[#3D251E]">
+                <span className="text-xs font-bold text-theme-text">
                   {t('settings.paymentDesc')}
                 </span>
                 <input
@@ -1733,19 +1742,19 @@ export const SettingsModule: React.FC = () => {
                     })
                   }
                   placeholder="Retail Store Payment"
-                  className="w-full rounded border border-[#ECB390] bg-white px-3 py-1.5 text-xs font-semibold text-[#3D251E] outline-none focus:border-[#DF7861]"
+                  className="w-full rounded border border-theme-border bg-theme-input px-3 py-1.5 text-xs font-semibold text-theme-text placeholder-theme-muted/70 outline-none focus:border-theme-btn"
                 />
               </label>
 
-              <div className="rounded border border-[#ECB390] bg-[#ECDFC8]/60 p-3">
-                <div className="text-xs font-bold text-[#3D251E]">
+              <div className="rounded border border-theme-border/50 bg-theme-surface/40 p-3">
+                <div className="text-xs font-bold text-theme-text">
                   {t('settings.staticQrTitle')}
                 </div>
-                <p className="mt-0.5 text-[11px] text-[#7A6258]">
+                <p className="mt-0.5 text-[11px] text-theme-muted">
                   {t('settings.staticQrHint')}
                 </p>
                 <div className="mt-2 flex items-center gap-2">
-                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded bg-[#DF7861] px-3.5 py-1.5 text-xs font-bold text-[#FCF8E8] hover:bg-[#c9624c]">
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded bg-theme-btn px-3.5 py-1.5 text-xs font-bold text-theme-btn-text hover:bg-theme-btn-hover">
                     <LuUpload className="h-3.5 w-3.5" />
                     <span>{t('settings.staticQrUpload')}</span>
                     <input
@@ -1761,7 +1770,7 @@ export const SettingsModule: React.FC = () => {
                       onClick={() =>
                         setPaymentForm({ ...paymentForm, static_qr_image: '' })
                       }
-                      className="rounded border border-[#DF7861] bg-[#ECB390]/40 px-3 py-1.5 text-xs font-bold text-[#B93829] hover:bg-[#ECB390]"
+                      className="rounded border border-theme-danger/40 bg-red-50 px-3 py-1.5 text-xs font-bold text-theme-danger hover:bg-red-100"
                     >
                       {t('settings.staticQrRemove')}
                     </button>
@@ -1770,8 +1779,8 @@ export const SettingsModule: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex flex-col items-center justify-center rounded border border-[#ECB390] bg-[#ECDFC8]/40 p-4 text-center">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-[#7A6258]">
+            <div className="flex flex-col items-center justify-center rounded border border-theme-border/50 bg-theme-surface/30 p-4 text-center">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-theme-muted">
                 {t('settings.qrPreview')}
               </div>
 
@@ -1780,15 +1789,15 @@ export const SettingsModule: React.FC = () => {
                   <img
                     src={paymentForm.static_qr_image}
                     alt="Static UPI QR"
-                    className="h-40 w-40 rounded border border-[#ECB390] bg-white object-contain p-2"
+                    className="h-40 w-40 rounded border border-theme-border/50 bg-white object-contain p-2"
                   />
-                  <div className="mt-1.5 text-xs font-bold text-[#5C4338]">
+                  <div className="mt-1.5 text-xs font-bold text-theme-muted">
                     {t('billing.UploadedStaticQr')}
                   </div>
                 </div>
               ) : paymentForm.upi_id ? (
                 <div className="mt-3 flex flex-col items-center">
-                  <div className="rounded border border-[#ECB390] bg-white p-2.5">
+                  <div className="rounded border border-theme-border/50 bg-white p-2.5">
                     <QrCodeCanvas
                       value={`upi://pay?pa=${paymentForm.upi_id}&pn=${encodeURIComponent(
                         paymentForm.payee_name || 'Store',
@@ -1796,15 +1805,15 @@ export const SettingsModule: React.FC = () => {
                       size={150}
                     />
                   </div>
-                  <div className="mt-1.5 text-xs font-mono font-bold text-[#3D251E] font-english">
+                  <div className="mt-1.5 text-xs font-mono font-bold text-theme-text font-english">
                     {paymentForm.upi_id}
                   </div>
-                  <div className="text-[11px] text-[#7A6258]">
+                  <div className="text-[11px] text-theme-muted">
                     {t('billing.autoDynamicQr')}
                   </div>
                 </div>
               ) : (
-                <div className="mt-4 flex h-40 w-48 items-center justify-center rounded border border-dashed border-[#ECB390] p-4 text-xs font-bold text-[#7A6258]">
+                <div className="mt-4 flex h-40 w-48 items-center justify-center rounded border border-dashed border-theme-border bg-theme-card p-4 text-xs font-bold text-theme-muted">
                   {t('settings.qrEmptyPrompt')}
                 </div>
               )}

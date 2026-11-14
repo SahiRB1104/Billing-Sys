@@ -69,16 +69,13 @@ export const LandingPage: React.FC = () => {
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden">
       {/* Row 1: POS Terminal Header Strip */}
-      <div className="flex shrink-0 items-center justify-between gap-4 rounded-md border border-[#ECB390] bg-[#FCF8E8] px-4 py-2 shadow-xs">
+      <div className="flex shrink-0 items-center justify-between gap-4 rounded-md border border-theme-border/40 bg-theme-card px-4 py-2 shadow-xs">
         <div className="min-w-0">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-[#7A6258]">
-            {t('dashboard.subtitle')}
-          </div>
           <div className="flex flex-wrap items-baseline gap-2">
-            <h2 className="text-base font-black text-[#3D251E]">
+            <h2 className="text-base font-black text-theme-text">
               {t('home.welcome')}, {operatorName}
             </h2>
-            <span className="text-xs font-semibold text-[#5C4338]">
+            <span className="text-xs font-semibold text-theme-muted">
               • {storeName} •{' '}
               {new Date().toLocaleDateString(isMarathi ? 'mr-IN' : 'en-IN', {
                 weekday: 'short',
@@ -93,7 +90,7 @@ export const LandingPage: React.FC = () => {
         <button
           type="button"
           onClick={() => navigate('/billing')}
-          className="flex shrink-0 items-center gap-1.5 rounded-md bg-[#DF7861] px-4 py-2 text-xs font-bold text-[#FCF8E8] shadow-xs transition hover:bg-[#c9624c]"
+          className="flex shrink-0 items-center gap-1.5 rounded-md bg-theme-btn px-4 py-2 text-xs font-bold text-theme-btn-text shadow-xs transition hover:bg-theme-btn-hover"
         >
           <LuPlus className="h-4 w-4" />
           <span>{t('dashboard.newBillAction')}</span>
@@ -107,56 +104,46 @@ export const LandingPage: React.FC = () => {
         }`}
       >
         {/* Today's Sales */}
-        <div className="flex items-center justify-between rounded-md border border-[#ECB390] bg-[#FCF8E8] px-3.5 py-2">
+        <div className="flex items-center justify-between rounded-md border border-theme-border/40 bg-theme-card px-3.5 py-2">
           <div>
-            <div className="text-xs font-bold text-[#5C4338]">
+            <div className="text-xs font-bold text-theme-muted">
               {t('dashboard.todaySales')}
             </div>
-            <div className="mt-0.5 text-lg font-black text-[#3D251E] font-english">
+            <div className="mt-0.5 text-lg font-black text-theme-text font-english">
               {currency} {Number(dashboardStats?.today_sales ?? 0).toFixed(2)}
             </div>
-            <div className="text-[11px] font-semibold text-[#7A6258]">
-              {dashboardStats?.today_bills_count ?? 0}{' '}
-              {t('dashboard.billsCompletedCount')}
-            </div>
           </div>
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#ECB390] bg-[#ECDFC8] text-[#DF7861]">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-theme-border/40 bg-theme-surface text-theme-btn">
             <LuIndianRupee className="h-4 w-4" />
           </span>
         </div>
 
         {/* Completed Bills */}
-        <div className="flex items-center justify-between rounded-md border border-[#ECB390] bg-[#FCF8E8] px-3.5 py-2">
+        <div className="flex items-center justify-between rounded-md border border-theme-border/40 bg-theme-card px-3.5 py-2">
           <div>
-            <div className="text-xs font-bold text-[#5C4338]">
+            <div className="text-xs font-bold text-theme-muted">
               {t('dashboard.todayBills')}
             </div>
-            <div className="mt-0.5 text-lg font-black text-[#3D251E] font-english">
+            <div className="mt-0.5 text-lg font-black text-theme-text font-english">
               {dashboardStats?.today_bills_count ?? 0}
             </div>
-            <div className="text-[11px] font-semibold text-[#7A6258]">
-              {t('dashboard.todayTransactions')}
-            </div>
           </div>
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#ECB390] bg-[#ECDFC8] text-[#DF7861]">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-theme-border/40 bg-theme-surface text-theme-btn">
             <LuReceipt className="h-4 w-4" />
           </span>
         </div>
 
         {/* Active Products */}
-        <div className="flex items-center justify-between rounded-md border border-[#ECB390] bg-[#FCF8E8] px-3.5 py-2">
+        <div className="flex items-center justify-between rounded-md border border-theme-border/40 bg-theme-card px-3.5 py-2">
           <div>
-            <div className="text-xs font-bold text-[#5C4338]">
+            <div className="text-xs font-bold text-theme-muted">
               {t('dashboard.activeProducts')}
             </div>
-            <div className="mt-0.5 text-lg font-black text-[#3D251E] font-english">
+            <div className="mt-0.5 text-lg font-black text-theme-text font-english">
               {dashboardStats?.total_products_count ?? 0}
             </div>
-            <div className="text-[11px] font-semibold text-[#7A6258]">
-              {t('dashboard.inCatalog')}
-            </div>
           </div>
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#ECB390] bg-[#ECDFC8] text-[#DF7861]">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-theme-border/40 bg-theme-surface text-theme-btn">
             <LuPackage className="h-4 w-4" />
           </span>
         </div>
@@ -165,30 +152,25 @@ export const LandingPage: React.FC = () => {
         <div
           className={`flex items-center justify-between rounded-md border px-3.5 py-2 ${
             (dashboardStats?.low_stock_count ?? 0) > 0
-              ? 'border-[#DF7861] bg-[#ECB390]/35'
-              : 'border-[#ECB390] bg-[#FCF8E8]'
+              ? 'border-theme-danger/60 bg-red-50/60'
+              : 'border-theme-border/40 bg-theme-card'
           }`}
         >
           <div>
-            <div className="text-xs font-bold text-[#5C4338]">
+            <div className="text-xs font-bold text-theme-muted">
               {t('dashboard.lowStockAlerts')}
             </div>
             <div
               className={`mt-0.5 text-lg font-black font-english ${
                 (dashboardStats?.low_stock_count ?? 0) > 0
-                  ? 'text-[#B93829]'
-                  : 'text-[#3D251E]'
+                  ? 'text-theme-danger'
+                  : 'text-theme-text'
               }`}
             >
               {dashboardStats?.low_stock_count ?? 0}
             </div>
-            <div className="text-[11px] font-semibold text-[#7A6258]">
-              {(dashboardStats?.low_stock_count ?? 0) > 0
-                ? t('dashboard.reorderNeeded')
-                : t('dashboard.noLowStock')}
-            </div>
           </div>
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#ECB390] bg-[#ECDFC8] text-[#DF7861]">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-theme-border/40 bg-theme-surface text-theme-btn">
             <LuTriangleAlert className="h-4 w-4" />
           </span>
         </div>
@@ -202,22 +184,18 @@ export const LandingPage: React.FC = () => {
             onKeyDown={(e) => {
               if (e.key === 'Enter') navigate('/bills?tab=credits')
             }}
-            className="flex cursor-pointer items-center justify-between rounded-md border border-[#DF7861] bg-[#FCF8E8] px-3.5 py-2 transition hover:bg-[#ECB390]/30"
+            className="flex cursor-pointer items-center justify-between rounded-md border border-theme-border bg-theme-card px-3.5 py-2 transition hover:bg-theme-surface/40"
           >
             <div>
-              <div className="text-xs font-bold text-[#5C4338]">
+              <div className="text-xs font-bold text-theme-muted">
                 {t('dashboard.totalUdhariTitle')}
               </div>
-              <div className="mt-0.5 text-lg font-black text-[#DF7861] font-english">
+              <div className="mt-0.5 text-lg font-black text-theme-btn font-english">
                 {currency}{' '}
                 {Number(dashboardStats?.total_udhari_due ?? 0).toFixed(2)}
               </div>
-              <div className="text-[11px] font-semibold text-[#7A6258]">
-                {dashboardStats?.udhari_bills_count ?? 0}{' '}
-                {t('dashboard.udhariCountSub')}
-              </div>
             </div>
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#DF7861] bg-[#DF7861] text-[#FCF8E8]">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-theme-btn text-theme-btn-text">
               <LuBookOpen className="h-4 w-4" />
             </span>
           </div>
@@ -227,15 +205,10 @@ export const LandingPage: React.FC = () => {
       {/* Row 3: Payment Breakdown & 7-Day Sales Trend */}
       <div className="grid shrink-0 grid-cols-1 gap-2 lg:grid-cols-2">
         {/* Payment Methods Breakdown */}
-        <div className="flex flex-col justify-between rounded-md border border-[#ECB390] bg-[#FCF8E8] p-3">
-          <div>
-            <h3 className="text-xs font-bold uppercase tracking-wide text-[#3D251E]">
-              {t('dashboard.paymentBreakdown')}
-            </h3>
-            <p className="text-[11px] text-[#7A6258]">
-              {t('dashboard.paymentBreakdownSub')}
-            </p>
-          </div>
+        <div className="flex flex-col justify-between rounded-md border border-theme-border/40 bg-theme-card p-3">
+          <h3 className="text-xs font-bold uppercase tracking-wide text-theme-text">
+            {t('dashboard.paymentBreakdown')}
+          </h3>
 
           <div className="mt-2 grid grid-cols-4 gap-2">
             {['CASH', 'UPI', 'CARD', 'CREDIT'].map((method) => {
@@ -246,16 +219,16 @@ export const LandingPage: React.FC = () => {
               return (
                 <div
                   key={method}
-                  className="rounded-md border border-[#ECB390] bg-[#ECDFC8]/70 px-3 py-1.5"
+                  className="rounded-md border border-theme-border/40 bg-theme-surface/60 px-3 py-1.5"
                 >
-                  <div className="truncate text-[10px] font-bold text-[#5C4338]">
+                  <div className="truncate text-[10px] font-bold text-theme-muted">
                     {paymentLabels[method] || method}
                   </div>
-                  <div className="mt-0.5 text-base font-black text-[#3D251E] font-english">
+                  <div className="mt-0.5 text-base font-black text-theme-text font-english">
                     {currency}
                     {data.amount.toFixed(0)}
                   </div>
-                  <div className="text-[10px] font-semibold text-[#7A6258]">
+                  <div className="text-[10px] font-semibold text-theme-muted">
                     {data.count} {t('dashboard.billsWord')}
                   </div>
                 </div>
@@ -265,27 +238,22 @@ export const LandingPage: React.FC = () => {
         </div>
 
         {/* 7-Day Trend Bar Visualization */}
-        <div className="flex flex-col justify-between rounded-md border border-[#ECB390] bg-[#FCF8E8] p-3">
+        <div className="flex flex-col justify-between rounded-md border border-theme-border/40 bg-theme-card p-3">
           <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wide text-[#3D251E]">
-                {t('dashboard.weeklyTrend')}
-              </h3>
-              <p className="text-[11px] text-[#7A6258]">
-                {t('dashboard.weeklyTrendSub')}
-              </p>
-            </div>
+            <h3 className="text-xs font-bold uppercase tracking-wide text-theme-text">
+              {t('dashboard.weeklyTrend')}
+            </h3>
             <button
               type="button"
               onClick={() => void fetchDashboardStats()}
-              className="flex items-center gap-1 rounded border border-[#ECB390] bg-[#ECDFC8] px-2.5 py-1 text-[11px] font-bold text-[#3D251E] hover:bg-[#ECB390]"
+              className="flex items-center gap-1 rounded border border-theme-border bg-theme-surface px-2.5 py-1 text-[11px] font-bold text-theme-btn hover:bg-theme-border/20"
             >
-              <LuRefreshCw className="h-3 w-3 text-[#DF7861]" />
+              <LuRefreshCw className="h-3 w-3" />
               <span>{t('dashboard.refresh')}</span>
             </button>
           </div>
 
-          <div className="mt-2 flex h-20 items-end justify-between gap-2 border-b border-[#ECB390] pb-1">
+          <div className="mt-2 flex h-20 items-end justify-between gap-2 border-b border-theme-border/40 pb-1">
             {dashboardStats?.daily_trend?.map((item) => {
               const maxSale = Math.max(
                 ...dashboardStats.daily_trend.map((d) => d.sales),
@@ -309,20 +277,20 @@ export const LandingPage: React.FC = () => {
                   key={item.date}
                   className="flex h-full flex-1 flex-col items-center justify-end gap-1"
                 >
-                  <div className="text-[10px] font-bold text-[#5C4338] font-english">
+                  <div className="text-[10px] font-bold text-theme-muted font-english">
                     {currency}
                     {isMarathi ? toDevanagariDigits(rawAmt) : rawAmt}
                   </div>
                   <div
-                    className="flex w-full max-w-[28px] items-end justify-center rounded-t bg-[#ECDFC8] transition-all"
+                    className="flex w-full max-w-[28px] items-end justify-center rounded-t bg-theme-surface transition-all"
                     style={{ height: `${heightPct}%` }}
                   >
                     <div
-                      className="w-full rounded-t bg-[#DF7861]"
+                      className="w-full rounded-t bg-theme-btn"
                       style={{ height: `${Math.min(100, heightPct)}%` }}
                     />
                   </div>
-                  <div className="text-[10px] font-bold text-[#3D251E]">
+                  <div className="text-[10px] font-bold text-theme-text">
                     {dayLabel}
                   </div>
                 </div>
@@ -340,20 +308,15 @@ export const LandingPage: React.FC = () => {
       >
         {/* Priority Pending Udhari Table (Admin only - Highest Amount & Oldest Pending First) */}
         {isAdmin && (
-          <div className="flex min-h-0 flex-col rounded-md border border-[#ECB390] bg-[#FCF8E8] p-3">
-            <div className="mb-2 flex shrink-0 items-center justify-between">
-              <div>
-                <h3 className="text-xs font-bold uppercase tracking-wide text-[#3D251E]">
-                  {t('dashboard.priorityUdhariTitle')}
-                </h3>
-                <p className="text-[11px] text-[#7A6258]">
-                  {t('dashboard.priorityUdhariSub')}
-                </p>
-              </div>
+          <div className="flex min-h-0 flex-col rounded-md border border-theme-border/40 bg-theme-card p-3">
+            <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
+              <h3 className="text-xs font-bold uppercase tracking-wide text-theme-text">
+                {t('dashboard.priorityUdhariTitle')}
+              </h3>
               <button
                 type="button"
                 onClick={() => navigate('/bills?tab=credits')}
-                className="flex items-center gap-1 rounded border border-[#ECB390] bg-[#ECDFC8] px-2.5 py-1 text-xs font-bold text-[#3D251E] hover:bg-[#ECB390]"
+                className="flex items-center gap-1 rounded border border-theme-border bg-theme-surface px-2.5 py-1 text-xs font-bold text-theme-btn hover:bg-theme-border/20"
               >
                 <span>{t('dashboard.viewAll')}</span>
                 <LuArrowRight className="h-3 w-3" />
@@ -362,7 +325,7 @@ export const LandingPage: React.FC = () => {
 
             {!dashboardStats?.priority_udhari_bills ||
             dashboardStats.priority_udhari_bills.length === 0 ? (
-              <div className="flex flex-1 items-center justify-center rounded border border-dashed border-[#ECB390] bg-[#ECDFC8]/40 p-4 text-center text-xs font-bold text-[#5C4338]">
+              <div className="flex flex-1 items-center justify-center rounded border border-dashed border-theme-border/40 bg-theme-surface/40 p-4 text-center text-xs font-bold text-theme-muted">
                 {t('dashboard.noPriorityUdhari')}
               </div>
             ) : (
@@ -370,10 +333,10 @@ export const LandingPage: React.FC = () => {
                 tabIndex={0}
                 role="region"
                 aria-label={t('dashboard.priorityUdhariTitle')}
-                className="pos-scroll min-h-0 flex-1 rounded border border-[#ECB390] bg-[#FCF8E8]"
+                className="pos-scroll min-h-0 flex-1 rounded border border-theme-border/40 bg-theme-card"
               >
                 <table className="pos-table text-left text-xs">
-                  <thead className="bg-[#ECB390] text-[11px] font-bold text-[#3D251E]">
+                  <thead className="bg-theme-header text-[11px] font-bold text-theme-btn-text">
                     <tr>
                       <th className="px-2.5 py-2">{t('bills.customer')}</th>
                       <th className="px-2 py-2 text-center">
@@ -387,27 +350,29 @@ export const LandingPage: React.FC = () => {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#ECDFC8] bg-[#FCF8E8]">
+                  <tbody className="divide-y divide-theme-surface bg-theme-card">
                     {dashboardStats.priority_udhari_bills.map((ub) => (
-                      <tr key={ub.id} className="hover:bg-[#ECDFC8]/60">
+                      <tr key={ub.id} className="hover:bg-theme-surface/50">
                         <td className="px-2.5 py-2">
-                          <div className="font-bold text-[#3D251E]">
+                          <div className="font-bold text-theme-text">
                             {localizeDynamicText(
                               ub.customer_name || '-',
                               isMarathi,
                             )}
                           </div>
-                          <div className="text-[10px] font-semibold text-[#7A6258] font-english">
+                          <div className="text-[10px] font-semibold text-theme-muted font-english">
                             {ub.invoice_number}
                             {ub.customer_phone ? ` • ${ub.customer_phone}` : ''}
                           </div>
                         </td>
-                        <td className="px-2 py-2 text-center font-bold text-[#5C4338]">
-                          <span className="rounded border border-[#ECB390] bg-[#ECDFC8] px-1.5 py-0.5 text-[10px] font-bold text-[#3D251E]">
-                            {ub.days_pending ?? 0} {t('dashboard.daysAgo')}
+                        <td className="px-2 py-2 text-center font-bold text-theme-muted">
+                          <span className="inline-block whitespace-nowrap rounded border border-theme-border/40 bg-theme-surface px-1.5 py-0.5 text-[10px] font-bold text-theme-text">
+                            {(ub.days_pending ?? 0) <= 0
+                              ? t('dashboard.todayTag')
+                              : t('dashboard.daysAgo', { days: ub.days_pending ?? 0 })}
                           </span>
                         </td>
-                        <td className="px-2.5 py-2 text-right font-black text-[#DF7861] font-english">
+                        <td className="px-2.5 py-2 text-right font-black text-theme-btn font-english">
                           {currency}
                           {Number(ub.balance_due ?? ub.grand_total).toFixed(2)}
                         </td>
@@ -415,7 +380,7 @@ export const LandingPage: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => openInvoiceDetail(ub)}
-                            className="inline-flex items-center gap-1 rounded border border-[#ECB390] bg-[#ECDFC8] px-2 py-1 text-[10px] font-bold text-[#3D251E] hover:bg-[#ECB390]"
+                            className="inline-flex items-center gap-1 rounded border border-theme-border bg-theme-surface px-2 py-1 text-[10px] font-bold text-theme-btn hover:bg-theme-border/20"
                           >
                             <LuEye className="h-3 w-3" />
                             <span>{t('bills.view')}</span>
@@ -431,21 +396,16 @@ export const LandingPage: React.FC = () => {
         )}
 
         {/* Low Stock Alert Table */}
-        <div className="flex min-h-0 flex-col rounded-md border border-[#ECB390] bg-[#FCF8E8] p-3">
-          <div className="mb-2 flex shrink-0 items-center justify-between">
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wide text-[#3D251E]">
-                {t('dashboard.lowStockTitle')}
-              </h3>
-              <p className="text-[11px] text-[#7A6258]">
-                {t('dashboard.lowStockSub')}
-              </p>
-            </div>
+        <div className="flex min-h-0 flex-col rounded-md border border-theme-border/40 bg-theme-card p-3">
+          <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
+            <h3 className="text-xs font-bold uppercase tracking-wide text-theme-text">
+              {t('dashboard.lowStockTitle')}
+            </h3>
             {isAdmin && (
               <button
                 type="button"
                 onClick={() => navigate('/products')}
-                className="flex items-center gap-1 rounded border border-[#ECB390] bg-[#ECDFC8] px-2.5 py-1 text-xs font-bold text-[#3D251E] hover:bg-[#ECB390]"
+                className="flex items-center gap-1 rounded border border-theme-border bg-theme-surface px-2.5 py-1 text-xs font-bold text-theme-btn hover:bg-theme-border/20"
               >
                 <span>{t('dashboard.restock')}</span>
                 <LuArrowRight className="h-3 w-3" />
@@ -455,7 +415,7 @@ export const LandingPage: React.FC = () => {
 
           {!dashboardStats?.low_stock_products ||
           dashboardStats.low_stock_products.length === 0 ? (
-            <div className="flex flex-1 items-center justify-center rounded border border-dashed border-[#ECB390] bg-[#ECDFC8]/40 p-4 text-center text-xs font-bold text-[#5C4338]">
+            <div className="flex flex-1 items-center justify-center rounded border border-dashed border-theme-border/40 bg-theme-surface/40 p-4 text-center text-xs font-bold text-theme-muted">
               {t('dashboard.noLowStock')}
             </div>
           ) : (
@@ -463,10 +423,10 @@ export const LandingPage: React.FC = () => {
               tabIndex={0}
               role="region"
               aria-label={t('dashboard.lowStockTitle')}
-              className="pos-scroll min-h-0 flex-1 rounded border border-[#ECB390] bg-[#FCF8E8]"
+              className="pos-scroll min-h-0 flex-1 rounded border border-theme-border/40 bg-theme-card"
             >
               <table className="pos-table text-left text-xs">
-                <thead className="bg-[#ECB390] text-[11px] font-bold text-[#3D251E]">
+                <thead className="bg-theme-header text-[11px] font-bold text-theme-btn-text">
                   <tr>
                     <th className="px-3 py-2">{t('dashboard.colProduct')}</th>
                     <th className="px-3 py-2">{t('dashboard.colCategory')}</th>
@@ -478,20 +438,20 @@ export const LandingPage: React.FC = () => {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#ECDFC8] bg-[#FCF8E8]">
+                <tbody className="divide-y divide-theme-surface bg-theme-card">
                   {dashboardStats.low_stock_products.map((p) => (
-                    <tr key={p.id} className="hover:bg-[#ECDFC8]/60">
-                      <td className="px-3 py-2 font-bold text-[#3D251E]">
+                    <tr key={p.id} className="hover:bg-theme-surface/50">
+                      <td className="px-3 py-2 font-bold text-theme-text">
                         {formatProductName(p.name_mr, isMarathi)}
                       </td>
-                      <td className="px-3 py-2 text-[#5C4338]">
+                      <td className="px-3 py-2 text-theme-muted">
                         {formatCategoryDisplay(p.category_mr, isMarathi) || '-'}
                       </td>
-                      <td className="px-3 py-2 text-right font-black text-[#B93829] font-english">
+                      <td className="px-3 py-2 text-right font-black text-theme-danger font-english">
                         {p.current_stock}{' '}
                         {formatUnitDisplay(p.unit_display, isMarathi)}
                       </td>
-                      <td className="px-3 py-2 text-right font-semibold text-[#5C4338] font-english">
+                      <td className="px-3 py-2 text-right font-semibold text-theme-muted font-english">
                         {p.low_stock_level}
                       </td>
                     </tr>
@@ -503,20 +463,15 @@ export const LandingPage: React.FC = () => {
         </div>
 
         {/* Recent Invoices Table */}
-        <div className="flex min-h-0 flex-col rounded-md border border-[#ECB390] bg-[#FCF8E8] p-3">
-          <div className="mb-2 flex shrink-0 items-center justify-between">
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wide text-[#3D251E]">
-                {t('dashboard.recentBillsTitle')}
-              </h3>
-              <p className="text-[11px] text-[#7A6258]">
-                {t('dashboard.recentBillsSub')}
-              </p>
-            </div>
+        <div className="flex min-h-0 flex-col rounded-md border border-theme-border/40 bg-theme-card p-3">
+          <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
+            <h3 className="text-xs font-bold uppercase tracking-wide text-theme-text">
+              {t('dashboard.recentBillsTitle')}
+            </h3>
             <button
               type="button"
               onClick={() => navigate('/bills')}
-              className="flex items-center gap-1 rounded border border-[#ECB390] bg-[#ECDFC8] px-2.5 py-1 text-xs font-bold text-[#3D251E] hover:bg-[#ECB390]"
+              className="flex items-center gap-1 rounded border border-theme-border bg-theme-surface px-2.5 py-1 text-xs font-bold text-theme-btn hover:bg-theme-border/20"
             >
               <span>{t('dashboard.viewAll')}</span>
               <LuArrowRight className="h-3 w-3" />
@@ -525,7 +480,7 @@ export const LandingPage: React.FC = () => {
 
           {!dashboardStats?.recent_invoices ||
           dashboardStats.recent_invoices.length === 0 ? (
-            <div className="flex flex-1 items-center justify-center rounded border border-dashed border-[#ECB390] bg-[#ECDFC8]/40 p-4 text-center text-xs font-bold text-[#5C4338]">
+            <div className="flex flex-1 items-center justify-center rounded border border-dashed border-theme-border/40 bg-theme-surface/40 p-4 text-center text-xs font-bold text-theme-muted">
               {t('dashboard.noRecentBills')}
             </div>
           ) : (
@@ -533,10 +488,10 @@ export const LandingPage: React.FC = () => {
               tabIndex={0}
               role="region"
               aria-label={t('dashboard.recentBillsTitle')}
-              className="pos-scroll min-h-0 flex-1 rounded border border-[#ECB390] bg-[#FCF8E8]"
+              className="pos-scroll min-h-0 flex-1 rounded border border-theme-border/40 bg-theme-card"
             >
               <table className="pos-table text-left text-xs">
-                <thead className="bg-[#ECB390] text-[11px] font-bold text-[#3D251E]">
+                <thead className="bg-theme-header text-[11px] font-bold text-theme-btn-text">
                   <tr>
                     <th className="px-2.5 py-2">{t('bills.billNo')}</th>
                     <th className="px-2 py-2">{t('dashboard.colTime')}</th>
@@ -547,13 +502,13 @@ export const LandingPage: React.FC = () => {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#ECDFC8] bg-[#FCF8E8]">
+                <tbody className="divide-y divide-theme-surface bg-theme-card">
                   {dashboardStats.recent_invoices.slice(0, 10).map((inv) => (
-                    <tr key={inv.id} className="hover:bg-[#ECDFC8]/60">
-                      <td className="px-2.5 py-2 font-bold text-[#3D251E] font-english">
+                    <tr key={inv.id} className="hover:bg-theme-surface/50">
+                      <td className="px-2.5 py-2 font-bold text-theme-text font-english">
                         {inv.invoice_number}
                       </td>
-                      <td className="px-2 py-2 text-[#5C4338] font-english">
+                      <td className="px-2 py-2 text-theme-muted font-english">
                         {new Date(inv.date).toLocaleTimeString(
                           isMarathi ? 'mr-IN' : 'en-IN',
                           {
@@ -563,12 +518,12 @@ export const LandingPage: React.FC = () => {
                         )}
                       </td>
                       <td className="px-2 py-2">
-                        <span className="rounded border border-[#ECB390] bg-[#ECDFC8] px-2 py-0.5 text-[10px] font-bold text-[#3D251E]">
+                        <span className="rounded border border-theme-border/40 bg-theme-surface px-2 py-0.5 text-[10px] font-bold text-theme-text">
                           {paymentLabels[inv.payment_method] ||
                             inv.payment_method}
                         </span>
                       </td>
-                      <td className="px-2.5 py-2 text-right font-black text-[#3D251E] font-english">
+                      <td className="px-2.5 py-2 text-right font-black text-theme-text font-english">
                         {currency}
                         {Number(inv.grand_total ?? inv.amount).toFixed(2)}
                       </td>
@@ -576,7 +531,7 @@ export const LandingPage: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => openInvoiceDetail(inv)}
-                          className="inline-flex items-center gap-1 rounded border border-[#ECB390] bg-[#ECDFC8] px-2 py-1 text-[10px] font-bold text-[#3D251E] hover:bg-[#ECB390]"
+                          className="inline-flex items-center gap-1 rounded border border-theme-border bg-theme-surface px-2 py-1 text-[10px] font-bold text-theme-btn hover:bg-theme-border/20"
                         >
                           <LuEye className="h-3 w-3" />
                           <span>{t('bills.view')}</span>
